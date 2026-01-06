@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef FLAGS_H_06_01_2026
 #define FLAGS_H_06_01_2026
 

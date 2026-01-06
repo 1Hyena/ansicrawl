@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef UTILS_H_19_11_2024
 #define UTILS_H_19_11_2024
 
