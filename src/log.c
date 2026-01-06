@@ -11,7 +11,9 @@
 
 
 void log_part(const char *str, size_t len) {
-    (void)!write(STDERR_FILENO, str, len);
+    if (global.bitset.tty == false) {
+        (void)!write(STDERR_FILENO, str, len);
+    }
 }
 
 void log_text(const char *str) {

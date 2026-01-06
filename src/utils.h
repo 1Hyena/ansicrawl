@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef UTILS_H_19_11_2024
-#define UTILS_H_19_11_2024
+#ifndef UTILS_H_06_01_2026
+#define UTILS_H_06_01_2026
 
 
 bool fuse(const char *file, int line);

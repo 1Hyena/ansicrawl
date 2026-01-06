@@ -184,7 +184,7 @@ size_t mem_get_usage() {
     return usage;
 }
 
-void mem_clear() {
+void mem_recycle() {
     for (size_t i=0; i<ARRAY_LENGTH(global.free.memory); ++i) {
         for (size_t j=0; j<ARRAY_LENGTH(global.free.memory[i]); ++j) {
             MEM *mem = global.free.memory[i][j];
@@ -198,6 +198,10 @@ void mem_clear() {
             global.free.memory[i][j] = nullptr;
         }
     }
+}
+
+void mem_clear() {
+    mem_recycle();
 
     MEM *mem = global.list.memory;
 
@@ -229,4 +233,70 @@ MEM *mem_get_metadata(const void *data, size_t alignment) {
     }
 
     return metadata;
+}
+
+
+CLIP *mem_new_clip() {
+    static CLIP zero;
+    CLIP *ds = mem_new(alignof(typeof(zero)), sizeof(zero))->data;
+
+    *ds = zero;
+
+    return ds;
+}
+
+void mem_free_clip(CLIP *ds) {
+    mem_free(ds->memory);
+    mem_free(mem_get_metadata(ds, alignof(typeof(*ds))));
+}
+
+USER *mem_new_user() {
+    static USER zero;
+
+    MEM *mem = mem_new(alignof(typeof(zero)), sizeof(zero));
+    USER *user = mem ? mem->data : nullptr;
+
+    if (user) {
+        *user = zero;
+    }
+
+    return user;
+}
+
+void mem_free_user(USER *user) {
+    mem_free(mem_get_metadata(user, alignof(typeof(*user))));
+}
+
+SERVER *mem_new_server() {
+    static SERVER zero;
+
+    MEM *mem = mem_new(alignof(typeof(zero)), sizeof(zero));
+    SERVER *server = mem ? mem->data : nullptr;
+
+    if (server) {
+        *server = zero;
+    }
+
+    return server;
+}
+
+void mem_free_server(SERVER *server) {
+    mem_free(mem_get_metadata(server, alignof(typeof(*server))));
+}
+
+CLIENT *mem_new_client() {
+    static CLIENT zero;
+
+    MEM *mem = mem_new(alignof(typeof(zero)), sizeof(zero));
+    CLIENT *client = mem ? mem->data : nullptr;
+
+    if (client) {
+        *client = zero;
+    }
+
+    return client;
+}
+
+void mem_free_client(CLIENT *client) {
+    mem_free(mem_get_metadata(client, alignof(typeof(*client))));
 }

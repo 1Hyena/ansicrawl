@@ -8,14 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-//static void main_loop();
-//static void main_pulse();
+static void main_loop();
+static void main_pulse();
 static void main_init(int argc, char **argv);
 static void main_deinit();
 
 int main(int argc, char **argv) {
     main_init(argc, argv);
-    //main_loop();
+    main_loop();
     main_deinit();
 
     return EXIT_SUCCESS;
@@ -41,13 +41,35 @@ static void main_init(int argc, char **argv) {
         "starting up (compiled %s, %s)%s\033]0;Aronia\007%s",
         __DATE__, __TIME__, TERMINAL_ESC_HIDDEN, TERMINAL_ESC_HIDDEN_RESET
     );
+
+    global.client = client_create();
+    global.server = server_create();
+
+    client_init(global.client);
 }
 
 static void main_deinit() {
+    client_deinit(global.client);
+
     LOG("%s", "normal termination");
+
+    server_destroy(global.server);
+    client_destroy(global.client);
+
+    mem_recycle();
 
     if (mem_get_usage()) {
         WARN("%lu bytes of memory left hanging", mem_get_usage());
         mem_clear();
     }
+}
+
+static void main_loop() {
+    while (!global.bitset.shutdown) {
+        main_pulse();
+    }
+}
+
+static void main_pulse() {
+    client_pulse(global.client);
 }

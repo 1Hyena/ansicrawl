@@ -13,7 +13,11 @@
 #define MAX_STRING_LENGTH   4608
 #define MAX_INPUT_LENGTH    256
 
-typedef struct MEM MEM;
+typedef struct MEM      MEM;
+typedef struct USER     USER;
+typedef struct CLIENT   CLIENT;
+typedef struct SERVER   SERVER;
+typedef struct CLIP     CLIP;
 
 struct global_type {
     struct {
@@ -32,6 +36,14 @@ struct global_type {
         struct timespec boot;
         struct timespec pulse;
     } time;
+
+    struct {
+        bool tty:1;
+        bool shutdown:1;
+    } bitset;
+
+    SERVER *server;
+    CLIENT *client;
 };
 
 extern struct global_type global;

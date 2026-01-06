@@ -16,9 +16,19 @@ struct MEM {
 
 MEM *               mem_new             (size_t alignment, size_t size);
 void                mem_free            (MEM *);
+void                mem_recycle         ();
 void                mem_clear           ();
 size_t              mem_get_usage       ();
 size_t              mem_get_footprint   (const MEM *);
 MEM *               mem_get_metadata    (const void *data, size_t alignment);
+
+CLIP *              mem_new_clip        ();
+void                mem_free_clip       (CLIP *);
+USER *              mem_new_user        ();
+void                mem_free_user       (USER *);
+SERVER *            mem_new_server      ();
+void                mem_free_server     (SERVER *);
+CLIENT *            mem_new_client      ();
+void                mem_free_client     (CLIENT *);
 
 #endif
