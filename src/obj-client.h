@@ -36,6 +36,6 @@ void    client_destroy(CLIENT *);
 void    client_init(CLIENT *);
 void    client_deinit(CLIENT *);
 void    client_pulse(CLIENT *);
-void    client_write(CLIENT *, const char *str, size_t len);
+bool    client_write(CLIENT *, const char *str, size_t len);
 
 #endif

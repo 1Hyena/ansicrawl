@@ -109,6 +109,7 @@ static int client_get_cursor_position(CLIENT *client, int *rows, int *cols) {
         if (written == -1) {
             BUG("%s", strerror(errno));
         }
+        else FUSE();
 
         return -1;
     }
@@ -198,6 +199,7 @@ void client_deinit(CLIENT *client) {
 }
 
 static void client_draw_rows(CLIENT *client, CLIP *clip) {
+    bool success = true;
     int y;
 
     for (y = 0; y < client->tui.screenrows; y++) {
@@ -214,29 +216,40 @@ static void client_draw_rows(CLIENT *client, CLIP *clip) {
             int padding = (client->tui.screencols - welcomelen) / 2;
 
             if (padding) {
-                clip_append_char_array(clip, "~", 1);
+                success &= clip_append_char_array(clip, "~", 1);
                 padding--;
             }
-            while (padding--) clip_append_char_array(clip, " ", 1);
 
-            clip_append_char_array(clip, welcome, SIZEVAL(welcomelen));
+            while (padding--) {
+                success &= clip_append_char_array(clip, " ", 1);
+            }
+
+            success &= clip_append_char_array(
+                clip, welcome, SIZEVAL(welcomelen)
+            );
         } else {
-            clip_append_char_array(clip, "~", 1);
+            success &= clip_append_char_array(clip, "~", 1);
         }
 
-        clip_append_char_array(clip, "\x1b[K", 3);
+        success &= clip_append_char_array(clip, "\x1b[K", 3);
 
         if (y < client->tui.screenrows - 1) {
-            clip_append_char_array(clip, "\r\n", 2);
+            success &= clip_append_char_array(clip, "\r\n", 2);
         }
+    }
+
+    if (!success) {
+        FUSE();
+        client_die(client);
     }
 }
 
 static void client_refresh_screen(CLIENT *client) {
+    bool success = true;
     CLIP *clip = clip_create_char_array();
 
-    clip_append_char_array(clip, "\x1b[?25l", 6);
-    clip_append_char_array(clip, "\x1b[H", 3);
+    success &= clip_append_char_array(clip, "\x1b[?25l", 6);
+    success &= clip_append_char_array(clip, "\x1b[H", 3);
 
     client_draw_rows(client, clip);
 
@@ -246,11 +259,21 @@ static void client_refresh_screen(CLIENT *client) {
         buf, sizeof(buf), "\x1b[%d;%dH", client->tui.cy + 1, client->tui.cx + 1
     );
 
-    clip_append_char_array(clip, buf, strlen(buf));
+    success &= clip_append_char_array(clip, buf, strlen(buf));
+    success &= clip_append_char_array(clip, "\x1b[?25h", 6);
 
-    clip_append_char_array(clip, "\x1b[?25h", 6);
+    if (client->bitset.broken == false) {
+        if (success) {
+            client_write(
+                client, clip_get_char_array(clip), clip_get_size(clip)
+            );
+        }
+        else {
+            FUSE();
+            client_die(client);
+        }
+    }
 
-    write(STDOUT_FILENO, clip_get_char_array(clip), clip_get_size(clip));
     clip_destroy(clip);
 }
 
@@ -346,11 +369,32 @@ void client_pulse(CLIENT *client) {
     }
 
     client_refresh_screen(client);
+
+    if (!clip_is_empty(client->io.outgoing.clip)) {
+        auto written = write(
+            STDOUT_FILENO, clip_get_byte_array(client->io.outgoing.clip),
+            clip_get_size(client->io.outgoing.clip)
+        );
+
+        if (written != (ssize_t) clip_get_size(client->io.outgoing.clip)) {
+            if (written == -1) {
+                BUG("%s", strerror(errno));
+            }
+            else if (written > 0) {
+                clip_shift(client->io.outgoing.clip, (size_t) written);
+            }
+            else FUSE();
+        }
+        else {
+            clip_clear(client->io.outgoing.clip);
+        }
+    }
+
     client_process_keypress(client);
 }
 
-void client_write(CLIENT *client, const char *str, size_t len) {
-    clip_append_char_array(
-        client->io.outgoing.clip, str, len ? len : strlen(str)
+bool client_write(CLIENT *client, const char *str, size_t len) {
+    return clip_append_byte_array(
+        client->io.outgoing.clip, (const uint8_t *) str, len ? len : strlen(str)
     );
 }

@@ -48,7 +48,7 @@ bool fuse(const char *path, int line) {
     }
 
     fuses[byte] |= bit;
-    //WIZNET_BUG("%s", buf);
+    WIZNET_BUG("%s", buf);
 
     return true;
 }

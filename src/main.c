@@ -38,7 +38,7 @@ static void main_init(int argc, char **argv) {
     //init_signals();
 
     LOG(
-        "starting up (compiled %s, %s)%s\033]0;Aronia\007%s",
+        "starting up (compiled %s, %s)%s\033]0;ANSI Crawl\007%s",
         __DATE__, __TIME__, TERMINAL_ESC_HIDDEN, TERMINAL_ESC_HIDDEN_RESET
     );
 

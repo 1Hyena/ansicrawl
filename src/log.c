@@ -116,7 +116,7 @@ void log_wiznet(
         if (IS_SET(flag, LOG_FLAG_BUGS)) {
             LOG("\x1B[1;31mBUG:\x1B[0m %s", string);
         }
-        else if (!IS_SET(flag, LOG_FLAG_DEBUG) && !IS_SET(flag, LOG_FLAG_TELCOM)) {
+        else if (!IS_ANY_SET(flag, LOG_FLAG_DEBUG|LOG_FLAG_TELCOM)) {
             LOG("%s", string);
         }
     }
