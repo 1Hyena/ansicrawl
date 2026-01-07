@@ -51,9 +51,6 @@ void client_destroy(CLIENT *client) {
 static void client_die(const char *s) {
     auto err = errno;
 
-    //log_text("\x1b[2J");
-    //log_text("\x1b[H");
-
     if (s && *s) {
         BUG("%s: %s", s, strerror(err));
     }
@@ -78,15 +75,12 @@ static void client_disable_raw_mode() {
     }
 
     global.bitset.tty = false;
+
     write(STDOUT_FILENO, "\x1b[?47l", 6);
     write(STDOUT_FILENO, "\x1b" "8", 2);
-
-    //write(STDOUT_FILENO, "\x1b[?1049l", 8);
 }
 
 static void client_enable_raw_mode(CLIENT *client) {
-    //write(STDOUT_FILENO, "\x1b[?1049h", 8);
-
     write(STDOUT_FILENO, "\x1b" "7", 2);
     write(STDOUT_FILENO, "\x1b[?47h", 6);
 
@@ -170,7 +164,7 @@ static void client_init_editor(CLIENT *client) {
     );
 
     if (ret == -1) {
-        client_die("getWindowSize");
+        client_die("client_get_window_size");
     }
 }
 
@@ -186,7 +180,7 @@ void client_deinit(CLIENT *client) {
     }
 }
 
-static void client_draw_rows(CLIENT *client, CLIP *ab) {
+static void client_draw_rows(CLIENT *client, CLIP *clip) {
     int y;
 
     for (y = 0; y < client->tui.screenrows; y++) {
@@ -203,31 +197,31 @@ static void client_draw_rows(CLIENT *client, CLIP *ab) {
             int padding = (client->tui.screencols - welcomelen) / 2;
 
             if (padding) {
-                clip_append_char_array(ab, "~", 1);
+                clip_append_char_array(clip, "~", 1);
                 padding--;
             }
-            while (padding--) clip_append_char_array(ab, " ", 1);
+            while (padding--) clip_append_char_array(clip, " ", 1);
 
-            clip_append_char_array(ab, welcome, SIZEVAL(welcomelen));
+            clip_append_char_array(clip, welcome, SIZEVAL(welcomelen));
         } else {
-            clip_append_char_array(ab, "~", 1);
+            clip_append_char_array(clip, "~", 1);
         }
 
-        clip_append_char_array(ab, "\x1b[K", 3);
+        clip_append_char_array(clip, "\x1b[K", 3);
 
         if (y < client->tui.screenrows - 1) {
-            clip_append_char_array(ab, "\r\n", 2);
+            clip_append_char_array(clip, "\r\n", 2);
         }
     }
 }
 
 static void client_refresh_screen(CLIENT *client) {
-    CLIP *ab = clip_create_char_array();
+    CLIP *clip = clip_create_char_array();
 
-    clip_append_char_array(ab, "\x1b[?25l", 6);
-    clip_append_char_array(ab, "\x1b[H", 3);
+    clip_append_char_array(clip, "\x1b[?25l", 6);
+    clip_append_char_array(clip, "\x1b[H", 3);
 
-    client_draw_rows(client, ab);
+    client_draw_rows(client, clip);
 
     char buf[32];
 
@@ -235,21 +229,22 @@ static void client_refresh_screen(CLIENT *client) {
         buf, sizeof(buf), "\x1b[%d;%dH", client->tui.cy + 1, client->tui.cx + 1
     );
 
-    clip_append_char_array(ab, buf, strlen(buf));
+    clip_append_char_array(clip, buf, strlen(buf));
 
-    clip_append_char_array(ab, "\x1b[?25h", 6);
+    clip_append_char_array(clip, "\x1b[?25h", 6);
 
-    write(STDOUT_FILENO, clip_get_char_array(ab), clip_get_size(ab));
-    clip_destroy(ab);
+    write(STDOUT_FILENO, clip_get_char_array(clip), clip_get_size(clip));
+    clip_destroy(clip);
 }
-
 
 static int client_read_key(CLIENT *client) {
     ssize_t nread;
     char c;
 
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-        if (nread == -1 && errno != EAGAIN) client_die("read");
+        if (nread == -1 && errno != EAGAIN) {
+            client_die("read");
+        }
     }
 
     if (c == '\x1b') {
@@ -275,47 +270,54 @@ static int client_read_key(CLIENT *client) {
 }
 
 static void client_move_cursor(CLIENT *client, int key) {
-  switch (key) {
-    case ARROW_LEFT:
-      if (client->tui.cx != 0) {
-        client->tui.cx--;
-      }
-      break;
-    case ARROW_RIGHT:
-      if (client->tui.cx != client->tui.screencols - 1) {
-        client->tui.cx++;
-      }
-      break;
-    case ARROW_UP:
-      if (client->tui.cy != 0) {
-        client->tui.cy--;
-      }
-      break;
-    case ARROW_DOWN:
-      if (client->tui.cy != client->tui.screenrows - 1) {
-        client->tui.cy++;
-      }
-      break;
-  }
+    switch (key) {
+        case ARROW_LEFT: {
+            if (client->tui.cx != 0) {
+                client->tui.cx--;
+            }
+
+            break;
+        }
+        case ARROW_RIGHT: {
+            if (client->tui.cx != client->tui.screencols - 1) {
+                client->tui.cx++;
+            }
+
+            break;
+        }
+        case ARROW_UP: {
+            if (client->tui.cy != 0) {
+                client->tui.cy--;
+            }
+
+            break;
+        }
+        case ARROW_DOWN: {
+            if (client->tui.cy != client->tui.screenrows - 1) {
+                client->tui.cy++;
+            }
+
+            break;
+        }
+    }
 }
 
 static void client_process_keypress(CLIENT *client) {
-  int c = client_read_key(client);
+    int c = client_read_key(client);
 
-  switch (c) {
-    case CTRL_KEY('q'):
-      //write(STDOUT_FILENO, "\x1b[2J", 4);
-      //write(STDOUT_FILENO, "\x1b[H", 3);
-      global.bitset.shutdown = true;
-      break;
-
-    case ARROW_UP:
-    case ARROW_DOWN:
-    case ARROW_LEFT:
-    case ARROW_RIGHT:
-      client_move_cursor(client, c);
-      break;
-  }
+    switch (c) {
+        case CTRL_KEY('q'): {
+            global.bitset.shutdown = true;
+            break;
+        }
+        case ARROW_UP:
+        case ARROW_DOWN:
+        case ARROW_LEFT:
+        case ARROW_RIGHT: {
+            client_move_cursor(client, c);
+            break;
+        }
+    }
 }
 
 void client_pulse(CLIENT *client) {
