@@ -51,8 +51,8 @@ void client_destroy(CLIENT *client) {
 static void client_die(const char *s) {
     auto err = errno;
 
-    log_text("\x1b[2J");
-    log_text("\x1b[H");
+    //log_text("\x1b[2J");
+    //log_text("\x1b[H");
 
     if (s && *s) {
         BUG("%s: %s", s, strerror(err));
@@ -65,6 +65,10 @@ static void client_die(const char *s) {
 }
 
 static void client_disable_raw_mode() {
+    if (global.bitset.tty == false) {
+        return;
+    }
+
     auto ret = tcsetattr(
         STDIN_FILENO, TCSAFLUSH, &global.client->tui.orig_termios
     );
@@ -74,9 +78,18 @@ static void client_disable_raw_mode() {
     }
 
     global.bitset.tty = false;
+    write(STDOUT_FILENO, "\x1b[?47l", 6);
+    write(STDOUT_FILENO, "\x1b" "8", 2);
+
+    //write(STDOUT_FILENO, "\x1b[?1049l", 8);
 }
 
 static void client_enable_raw_mode(CLIENT *client) {
+    //write(STDOUT_FILENO, "\x1b[?1049h", 8);
+
+    write(STDOUT_FILENO, "\x1b" "7", 2);
+    write(STDOUT_FILENO, "\x1b[?47h", 6);
+
     if (tcgetattr(STDIN_FILENO, &client->tui.orig_termios) == -1) {
         client_die("tcgetattr");
     }
@@ -291,8 +304,8 @@ static void client_process_keypress(CLIENT *client) {
 
   switch (c) {
     case CTRL_KEY('q'):
-      write(STDOUT_FILENO, "\x1b[2J", 4);
-      write(STDOUT_FILENO, "\x1b[H", 3);
+      //write(STDOUT_FILENO, "\x1b[2J", 4);
+      //write(STDOUT_FILENO, "\x1b[H", 3);
       global.bitset.shutdown = true;
       break;
 
