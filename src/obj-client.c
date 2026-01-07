@@ -48,20 +48,11 @@ void client_destroy(CLIENT *client) {
     mem_free_client(client);
 }
 
-static void client_die(const char *s) {
-    auto err = errno;
-
-    if (s && *s) {
-        BUG("%s: %s", s, strerror(err));
-    }
-    else {
-        BUG("%s", strerror(err));
-    }
-
-    exit(1);
+static void client_die(CLIENT *client) {
+    client->bitset.broken = true;
 }
 
-static void client_disable_raw_mode() {
+static void client_disable_raw_mode(CLIENT *client) {
     if (global.bitset.tty == false) {
         return;
     }
@@ -71,7 +62,9 @@ static void client_disable_raw_mode() {
     );
 
     if (ret == -1) {
-        client_die("tcsetattr");
+        BUG("%s", strerror(errno));
+        client_die(client);
+        return;
     }
 
     global.bitset.tty = false;
@@ -81,14 +74,11 @@ static void client_disable_raw_mode() {
 }
 
 static void client_enable_raw_mode(CLIENT *client) {
-    write(STDOUT_FILENO, "\x1b" "7", 2);
-    write(STDOUT_FILENO, "\x1b[?47h", 6);
-
     if (tcgetattr(STDIN_FILENO, &client->tui.orig_termios) == -1) {
-        client_die("tcgetattr");
+        BUG("%s", strerror(errno));
+        client_die(client);
+        return;
     }
-
-    atexit(client_disable_raw_mode);
 
     struct termios raw = client->tui.orig_termios;
     raw.c_iflag &= (tcflag_t) ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -99,17 +89,27 @@ static void client_enable_raw_mode(CLIENT *client) {
     raw.c_cc[VTIME] = 1;
 
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
-        client_die("tcsetattr");
+        BUG("%s", strerror(errno));
+        client_die(client);
+        return;
     }
 
     global.bitset.tty = true;
+
+    write(STDOUT_FILENO, "\x1b" "7", 2);
+    write(STDOUT_FILENO, "\x1b[?47h", 6);
 }
 
-static int client_get_cursor_position(int *rows, int *cols) {
+static int client_get_cursor_position(CLIENT *client, int *rows, int *cols) {
     char buf[32];
     unsigned int i = 0;
+    auto written = write(STDOUT_FILENO, "\x1b[6n", 4);
 
-    if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) {
+    if (written != 4) {
+        if (written == -1) {
+            BUG("%s", strerror(errno));
+        }
+
         return -1;
     }
 
@@ -138,15 +138,21 @@ static int client_get_cursor_position(int *rows, int *cols) {
     return 0;
 }
 
-static int client_get_window_size(int *rows, int *cols) {
+static int client_get_window_size(CLIENT *client, int *rows, int *cols) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) {
+        auto written = write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12);
+
+        if (written != 12) {
+            if (written == -1) {
+                BUG("%s", strerror(errno));
+            }
+
             return -1;
         }
 
-        return client_get_cursor_position(rows, cols);
+        return client_get_cursor_position(client, rows, cols);
     }
 
     *cols = ws.ws_col;
@@ -160,23 +166,34 @@ static void client_init_editor(CLIENT *client) {
     client->tui.cy = 0;
 
     auto ret = client_get_window_size(
-        &client->tui.screenrows, &client->tui.screencols
+        client, &client->tui.screenrows, &client->tui.screencols
     );
 
     if (ret == -1) {
-        client_die("client_get_window_size");
+        BUG("failed to get window size");
+        client_die(client);
     }
 }
 
 void client_init(CLIENT *client) {
     client_enable_raw_mode(client);
+
+    if (client->bitset.broken) {
+        return;
+    }
+
     client_init_editor(client);
+
+    if (client->bitset.broken) {
+        return;
+    }
+
     LOG("%d x %d", client->tui.screencols, client->tui.screenrows);
 }
 
 void client_deinit(CLIENT *client) {
     if (client) {
-        client_disable_raw_mode();
+        client_disable_raw_mode(client);
     }
 }
 
@@ -243,7 +260,9 @@ static int client_read_key(CLIENT *client) {
 
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if (nread == -1 && errno != EAGAIN) {
-            client_die("read");
+            BUG("%s", strerror(errno));
+            client_die(client);
+            return CTRL_KEY('q');
         }
     }
 
@@ -321,6 +340,17 @@ static void client_process_keypress(CLIENT *client) {
 }
 
 void client_pulse(CLIENT *client) {
+    if (client->bitset.broken) {
+        global.bitset.shutdown = true;
+        return;
+    }
+
     client_refresh_screen(client);
     client_process_keypress(client);
+}
+
+void client_write(CLIENT *client, const char *str, size_t len) {
+    clip_append_char_array(
+        client->io.outgoing.clip, str, len ? len : strlen(str)
+    );
 }

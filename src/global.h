@@ -42,6 +42,7 @@ struct global_type {
         bool shutdown:1;
     } bitset;
 
+    CLIP *  logbuf;
     SERVER *server;
     CLIENT *client;
 };

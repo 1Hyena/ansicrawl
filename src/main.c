@@ -42,6 +42,7 @@ static void main_init(int argc, char **argv) {
         __DATE__, __TIME__, TERMINAL_ESC_HIDDEN, TERMINAL_ESC_HIDDEN_RESET
     );
 
+    global.logbuf = clip_create_char_array();
     global.client = client_create();
     global.server = server_create();
 
@@ -51,10 +52,21 @@ static void main_init(int argc, char **argv) {
 static void main_deinit() {
     client_deinit(global.client);
 
-    LOG("%s", "normal termination");
+    if (global.client->bitset.broken) {
+        WARN("%s", "abnormal termination");
+    }
+    else {
+        LOG("%s", "normal termination");
+    }
 
     server_destroy(global.server);
+    global.server = nullptr;
+
     client_destroy(global.client);
+    global.client = nullptr;
+
+    clip_destroy(global.logbuf);
+    global.logbuf = nullptr;
 
     mem_recycle();
 
