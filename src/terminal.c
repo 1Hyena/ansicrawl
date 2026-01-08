@@ -99,7 +99,9 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
     write(STDOUT_FILENO, "\x1b[?47h", 6);
 }
 
-static int terminal_get_cursor_position(TERMINAL *terminal, int *rows, int *cols) {
+static int terminal_get_cursor_position(
+    TERMINAL *terminal, int *rows, int *cols
+) {
     char buf[32];
     unsigned int i = 0;
     auto written = write(STDOUT_FILENO, "\x1b[6n", 4);
@@ -261,7 +263,8 @@ static void terminal_refresh_screen(TERMINAL *terminal) {
     char buf[32];
 
     snprintf(
-        buf, sizeof(buf), "\x1b[%d;%dH", terminal->screen.cy + 1, terminal->screen.cx + 1
+        buf, sizeof(buf), "\x1b[%d;%dH",
+        terminal->screen.cy + 1, terminal->screen.cx + 1
     );
 
     success &= clip_append_char_array(clip, buf, strlen(buf));
@@ -407,6 +410,7 @@ void terminal_pulse(TERMINAL *terminal) {
 
 bool terminal_write(TERMINAL *terminal, const char *str, size_t len) {
     return clip_append_byte_array(
-        terminal->io.outgoing.clip, (const uint8_t *) str, len ? len : strlen(str)
+        terminal->io.outgoing.clip,
+        (const uint8_t *) str, len ? len : strlen(str)
     );
 }
