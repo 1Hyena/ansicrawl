@@ -30,5 +30,7 @@ SERVER *            mem_new_server      ();
 void                mem_free_server     (SERVER *);
 CLIENT *            mem_new_client      ();
 void                mem_free_client     (CLIENT *);
+TERMINAL *          mem_new_terminal    ();
+void                mem_free_terminal   (TERMINAL *);
 
 #endif

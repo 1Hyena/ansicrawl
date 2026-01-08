@@ -42,17 +42,20 @@ static void main_init(int argc, char **argv) {
         __DATE__, __TIME__, TERMINAL_ESC_HIDDEN, TERMINAL_ESC_HIDDEN_RESET
     );
 
+    global.terminal = terminal_create();
     global.logbuf = clip_create_char_array();
     global.client = client_create();
     global.server = server_create();
 
+    terminal_init(global.terminal);
     client_init(global.client);
 }
 
 static void main_deinit() {
     client_deinit(global.client);
+    terminal_deinit(global.terminal);
 
-    if (global.client->bitset.broken) {
+    if (global.terminal->bitset.broken) {
         WARN("%s", "abnormal termination");
     }
     else {
@@ -67,6 +70,9 @@ static void main_deinit() {
 
     clip_destroy(global.logbuf);
     global.logbuf = nullptr;
+
+    terminal_destroy(global.terminal);
+    global.terminal = nullptr;
 
     mem_recycle();
 
@@ -84,4 +90,5 @@ static void main_loop() {
 
 static void main_pulse() {
     client_pulse(global.client);
+    terminal_pulse(global.terminal);
 }

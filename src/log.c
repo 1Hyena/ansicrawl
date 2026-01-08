@@ -11,7 +11,8 @@
 
 
 void log_part(const char *str, size_t len) {
-    if (global.bitset.tty == false) {
+    if (!global.terminal
+    || (!global.terminal->bitset.raw)) {
         if (global.logbuf && !clip_is_empty(global.logbuf)) {
             (void)!write(
                 STDERR_FILENO,

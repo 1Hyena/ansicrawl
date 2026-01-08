@@ -2,7 +2,10 @@
 #ifndef TERMINAL_H_06_01_2026
 #define TERMINAL_H_06_01_2026
 ////////////////////////////////////////////////////////////////////////////////
-#include <stddef.h>
+#include "global.h"
+////////////////////////////////////////////////////////////////////////////////
+//#include <stddef.h>
+#include <termios.h>
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -19,5 +22,38 @@ static constexpr char   TERMINAL_ESC_REVERSE[]          = "\033[7m";
 static constexpr char   TERMINAL_ESC_STRIKETHROUGH[]    = "\033[9m";
 static constexpr char   TERMINAL_ESC_RESET[]            = "\033[0m";
 static constexpr char   TERMINAL_ESC_CLEAR_SCREEN[]     = "\x1b[H\x1b[2J";
+
+struct TERMINAL {
+    struct termios original;
+
+    struct {
+        struct {
+            CLIP *clip;
+        } incoming;
+
+        struct {
+            CLIP *clip;
+        } outgoing;
+    } io;
+
+    struct {
+        int cx;
+        int cy;
+        int width;
+        int height;
+    } screen;
+
+    struct {
+        bool broken:1;
+        bool raw:1;
+    } bitset;
+};
+
+TERMINAL *  terminal_create();
+void        terminal_destroy(TERMINAL *);
+void        terminal_init(TERMINAL *);
+void        terminal_deinit(TERMINAL *);
+void        terminal_pulse(TERMINAL *);
+bool        terminal_write(TERMINAL *, const char *str, size_t len);
 
 #endif

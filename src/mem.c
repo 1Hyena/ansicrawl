@@ -300,3 +300,20 @@ CLIENT *mem_new_client() {
 void mem_free_client(CLIENT *client) {
     mem_free(mem_get_metadata(client, alignof(typeof(*client))));
 }
+
+TERMINAL *mem_new_terminal() {
+    static TERMINAL zero;
+
+    MEM *mem = mem_new(alignof(typeof(zero)), sizeof(zero));
+    TERMINAL *terminal = mem ? mem->data : nullptr;
+
+    if (terminal) {
+        *terminal = zero;
+    }
+
+    return terminal;
+}
+
+void mem_free_terminal(TERMINAL *terminal) {
+    mem_free(mem_get_metadata(terminal, alignof(typeof(*terminal))));
+}

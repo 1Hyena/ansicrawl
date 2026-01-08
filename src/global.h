@@ -18,6 +18,7 @@ typedef struct USER     USER;
 typedef struct CLIENT   CLIENT;
 typedef struct SERVER   SERVER;
 typedef struct CLIP     CLIP;
+typedef struct TERMINAL TERMINAL;
 
 struct global_type {
     struct {
@@ -38,11 +39,11 @@ struct global_type {
     } time;
 
     struct {
-        bool tty:1;
         bool shutdown:1;
     } bitset;
 
-    CLIP *  logbuf;
+    TERMINAL *terminal;
+    CLIP *logbuf;
     SERVER *server;
     CLIENT *client;
 };
