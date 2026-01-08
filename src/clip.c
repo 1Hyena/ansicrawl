@@ -408,6 +408,86 @@ bool clip_push_ucs4(CLIP *clip, ucs4_t value) {
     return clip_append_ucs4_array(clip, &value, 1);
 }
 
+bool clip_pop_byte(CLIP *clip) {
+    if (clip->type != CLIP_BYTE) {
+        FUSE();
+        return false;
+    }
+
+    if (clip_is_empty(clip)) {
+        FUSE();
+        return false;
+    }
+
+    clip->size--;
+
+    return true;
+}
+
+bool clip_pop_char(CLIP *clip) {
+    if (clip->type != CLIP_CHAR) {
+        FUSE();
+        return false;
+    }
+
+    if (clip_is_empty(clip)) {
+        FUSE();
+        return false;
+    }
+
+    clip->size--;
+
+    return true;
+}
+
+bool clip_pop_long(CLIP *clip) {
+    if (clip->type != CLIP_LONG) {
+        FUSE();
+        return false;
+    }
+
+    if (clip_is_empty(clip)) {
+        FUSE();
+        return false;
+    }
+
+    clip->size--;
+
+    return true;
+}
+
+bool clip_pop_voidptr(CLIP *clip) {
+    if (clip->type != CLIP_VOIDPTR) {
+        FUSE();
+        return false;
+    }
+
+    if (clip_is_empty(clip)) {
+        FUSE();
+        return false;
+    }
+
+    clip->size--;
+
+    return true;
+}
+
+bool clip_pop_ucs4(CLIP *clip) {
+    if (clip->type != CLIP_UCS4) {
+        FUSE();
+        return false;
+    }
+
+    if (clip_is_empty(clip)) {
+        FUSE();
+        return false;
+    }
+
+    clip->size--;
+
+    return true;
+}
+
 bool clip_append_clip(CLIP *dst, const CLIP *src) {
     if (dst->type != src->type) {
         FUSE();

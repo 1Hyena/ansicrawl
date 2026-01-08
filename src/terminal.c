@@ -68,8 +68,8 @@ static void terminal_disable_raw_mode(TERMINAL *terminal) {
 
     terminal->bitset.raw = false;
 
-    write(STDOUT_FILENO, "\x1b[?47l", 6);
-    write(STDOUT_FILENO, "\x1b" "8", 2);
+    terminal_write(terminal, "\x1b[?47l", 0);
+    terminal_write(terminal, "\x1b" "8", 0);
 }
 
 static void terminal_enable_raw_mode(TERMINAL *terminal) {
@@ -85,7 +85,7 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
     raw.c_cflag |= (CS8);
     raw.c_lflag &= (tcflag_t) ~(ECHO | ICANON | IEXTEN | ISIG);
     raw.c_cc[VMIN] = 0;
-    raw.c_cc[VTIME] = 1;
+    raw.c_cc[VTIME] = 10;
 
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
         BUG("%s", strerror(errno));
@@ -95,114 +95,81 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
 
     terminal->bitset.raw = true;
 
-    write(STDOUT_FILENO, "\x1b" "7", 2);
-    write(STDOUT_FILENO, "\x1b[?47h", 6);
+    terminal_write(terminal, "\x1b" "7", 0);
+    terminal_write(terminal, "\x1b[?47h", 0);
 }
 
-static int terminal_get_cursor_position(
-    TERMINAL *terminal, int *rows, int *cols
-) {
-    char buf[32];
-    unsigned int i = 0;
-    auto written = write(STDOUT_FILENO, "\x1b[6n", 4);
-
-    if (written != 4) {
-        if (written == -1) {
-            BUG("%s", strerror(errno));
-        }
-        else FUSE();
-
-        return -1;
+static bool terminal_task_get_screen_size(TERMINAL *terminal) {
+    if (!clip_push_byte(terminal->io.incoming.clip, 0)) {
+        BUG("failed to get screen size");
+        terminal_die(terminal);
+        return false;
     }
 
-    while (i < sizeof(buf) - 1) {
-        if (read(STDIN_FILENO, &buf[i], 1) != 1) {
-            break;
-        }
+    const char *buf = (const char *) clip_get_byte_array(
+        terminal->io.incoming.clip
+    );
 
-        if (buf[i] == 'R') {
-            break;
-        }
+    int rows;
+    int cols;
+    bool success = false;
 
-        i++;
+    if (buf[0] == '\x1b'
+    &&  buf[1] == '['
+    &&  sscanf(&buf[2], "%d;%d", &rows, &cols) == 2) {
+        success = true;
     }
 
-    buf[i] = '\0';
+    clip_pop_byte(terminal->io.incoming.clip);
 
-    if (buf[0] != '\x1b' || buf[1] != '[') {
-        return -1;
+    if (!success) {
+        BUG("failed to get screen size");
+        terminal_die(terminal);
+        return false;
     }
 
-    if (sscanf(&buf[2], "%d;%d", rows, cols) != 2) {
-        return -1;
-    }
+    terminal->screen.width = cols;
+    terminal->screen.height = rows;
+    terminal->bitset.redraw = true;
+    terminal->bitset.reformat = false;
 
-    return 0;
+    terminal->state = TERMINAL_IDLE;
+
+    return true;
 }
 
-static int terminal_get_window_size(TERMINAL *terminal, int *rows, int *cols) {
+static bool terminal_task_ask_screen_size(TERMINAL *terminal) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        auto written = write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12);
-
-        if (written != 12) {
-            if (written == -1) {
-                BUG("%s", strerror(errno));
-            }
-
-            return -1;
+        if (!terminal_write(terminal, "\x1b[999C\x1b[999B", 0)
+        ||  !terminal_write(terminal, "\x1b[6n", 0)) {
+            BUG("failed to ask screen size");
+            terminal_die(terminal);
+            return false;
         }
 
-        return terminal_get_cursor_position(terminal, rows, cols);
+        terminal->state = TERMINAL_GET_SCREEN_SIZE;
+
+        return false;
     }
 
-    *cols = ws.ws_col;
-    *rows = ws.ws_row;
+    terminal->screen.width = ws.ws_col;
+    terminal->screen.height = ws.ws_row;
+    terminal->bitset.redraw = true;
+    terminal->bitset.reformat = false;
 
-    return 0;
+    terminal->state = TERMINAL_IDLE;
+
+    return true;
 }
 
-static void terminal_init_editor(TERMINAL *terminal) {
+static bool terminal_task_init_editor(TERMINAL *terminal) {
     terminal->screen.cx = 0;
     terminal->screen.cy = 0;
+    terminal->state = TERMINAL_ASK_SCREEN_SIZE;
 
-    auto ret = terminal_get_window_size(
-        terminal, &terminal->screen.height, &terminal->screen.width
-    );
-
-    if (ret == -1) {
-        BUG("failed to get window size");
-        terminal_die(terminal);
-    }
-}
-
-void terminal_init(TERMINAL *terminal) {
-    if (!terminal) {
-        return;
-    }
-
-    terminal_enable_raw_mode(terminal);
-
-    if (terminal->bitset.broken) {
-        return;
-    }
-
-    terminal_init_editor(terminal);
-
-    if (terminal->bitset.broken) {
-        return;
-    }
-
-    LOG("%d x %d", terminal->screen.width, terminal->screen.height);
-}
-
-void terminal_deinit(TERMINAL *terminal) {
-    if (!terminal) {
-        return;
-    }
-
-    terminal_disable_raw_mode(terminal);
+    return true;
 }
 
 static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
@@ -213,7 +180,8 @@ static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
         if (y == terminal->screen.height / 3) {
             char welcome[80];
             int welcomelen = snprintf(
-                welcome, sizeof(welcome), "ANSI Crawl -- version %s", "0.01"
+                welcome, sizeof(welcome),
+                "ANSI Crawl -- pulse %lu", global.count.pulse
             );
 
             if (welcomelen > terminal->screen.width) {
@@ -251,7 +219,7 @@ static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
     }
 }
 
-static void terminal_refresh_screen(TERMINAL *terminal) {
+static void terminal_redraw_screen(TERMINAL *terminal) {
     bool success = true;
     CLIP *clip = clip_create_char_array();
 
@@ -283,36 +251,49 @@ static void terminal_refresh_screen(TERMINAL *terminal) {
     }
 
     clip_destroy(clip);
+
+    terminal->bitset.redraw = false;
 }
 
 static int terminal_read_key(TERMINAL *terminal) {
-    ssize_t nread;
-    char c;
-
-    while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-        if (nread == -1 && errno != EAGAIN) {
-            BUG("%s", strerror(errno));
-            terminal_die(terminal);
-            return CTRL_KEY('q');
-        }
+    if (clip_is_empty(terminal->io.incoming.clip)) {
+        FUSE();
+        terminal_die(terminal);
+        return CTRL_KEY('q');
     }
 
+    char c = (char) clip_get_byte_at(terminal->io.incoming.clip, 0);
+
+    clip_destroy(clip_shift(terminal->io.incoming.clip, 1));
+
     if (c == '\x1b') {
-        char seq[3];
+        int key = '\x1b';
 
-        if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
-        if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
+        if (clip_get_size(terminal->io.incoming.clip) >= 2) {
+            const char *seq = (const char *) clip_get_byte_array(
+                terminal->io.incoming.clip
+            );
 
-        if (seq[0] == '[') {
-            switch (seq[1]) {
-                case 'A': return ARROW_UP;
-                case 'B': return ARROW_DOWN;
-                case 'C': return ARROW_RIGHT;
-                case 'D': return ARROW_LEFT;
+            if (seq[0] == '[') {
+                switch (seq[1]) {
+                    case 'A': key = ARROW_UP; break;
+                    case 'B': key = ARROW_DOWN; break;
+                    case 'C': key = ARROW_RIGHT; break;
+                    case 'D': key = ARROW_LEFT; break;
+                    default: {
+                        break;
+                    }
+                }
             }
+
+            clip_destroy(clip_shift(terminal->io.incoming.clip, 2));
+        }
+        else {
+            FUSE();
+            clip_clear(terminal->io.incoming.clip);
         }
 
-        return '\x1b';
+        return key;
     }
     else {
         return c;
@@ -353,6 +334,10 @@ static void terminal_move_cursor(TERMINAL *terminal, int key) {
 }
 
 static void terminal_process_keypress(TERMINAL *terminal) {
+    if (clip_is_empty(terminal->io.incoming.clip)) {
+        return;
+    }
+
     int c = terminal_read_key(terminal);
 
     switch (c) {
@@ -368,6 +353,48 @@ static void terminal_process_keypress(TERMINAL *terminal) {
             break;
         }
     }
+
+    terminal->bitset.redraw = true;
+}
+
+static bool terminal_task_idle(TERMINAL *terminal) {
+    terminal_process_keypress(terminal);
+
+    if (terminal->bitset.redraw) {
+        terminal_redraw_screen(terminal);
+    }
+
+    if (terminal->bitset.reformat) {
+        terminal->state = TERMINAL_ASK_SCREEN_SIZE;
+
+        return true;
+    }
+
+    return false;
+}
+
+void terminal_init(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
+    terminal_enable_raw_mode(terminal);
+
+    if (terminal->bitset.broken) {
+        return;
+    }
+
+    terminal->state = TERMINAL_INIT_EDITOR;
+}
+
+void terminal_deinit(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
+    terminal_disable_raw_mode(terminal);
+
+    terminal->state = TERMINAL_STATE_NONE;
 }
 
 void terminal_pulse(TERMINAL *terminal) {
@@ -383,29 +410,46 @@ void terminal_pulse(TERMINAL *terminal) {
         return;
     }
 
-    terminal_refresh_screen(terminal);
+    LOG("%d x %d", terminal->screen.width, terminal->screen.height);
 
-    if (!clip_is_empty(terminal->io.outgoing.clip)) {
-        auto written = write(
-            STDOUT_FILENO, clip_get_byte_array(terminal->io.outgoing.clip),
-            clip_get_size(terminal->io.outgoing.clip)
-        );
-
-        if (written != (ssize_t) clip_get_size(terminal->io.outgoing.clip)) {
-            if (written == -1) {
-                BUG("%s", strerror(errno));
+    do {
+        switch (terminal->state) {
+            case MAX_TERMINAL_STATE:
+            case TERMINAL_STATE_NONE: {
+                FUSE();
+                terminal_die(terminal);
+                return;
             }
-            else if (written > 0) {
-                clip_shift(terminal->io.outgoing.clip, (size_t) written);
-            }
-            else FUSE();
-        }
-        else {
-            clip_clear(terminal->io.outgoing.clip);
-        }
-    }
+            case TERMINAL_ASK_SCREEN_SIZE: {
+                if (!terminal_task_ask_screen_size(terminal)) {
+                    return;
+                }
 
-    terminal_process_keypress(terminal);
+                break;
+            }
+            case TERMINAL_GET_SCREEN_SIZE: {
+                if (!terminal_task_get_screen_size(terminal)) {
+                    return;
+                }
+
+                break;
+            }
+            case TERMINAL_INIT_EDITOR: {
+                if (!terminal_task_init_editor(terminal)) {
+                    return;
+                }
+
+                break;
+            }
+            case TERMINAL_IDLE: {
+                if (!terminal_task_idle(terminal)) {
+                    return;
+                }
+
+                break;
+            }
+        }
+    } while (!terminal->bitset.broken);
 }
 
 bool terminal_write(TERMINAL *terminal, const char *str, size_t len) {

@@ -67,10 +67,16 @@ bool        clip_push_char              (CLIP *, char);
 bool        clip_push_long              (CLIP *, long);
 bool        clip_push_voidptr           (CLIP *, const void *);
 bool        clip_push_ucs4              (CLIP *, ucs4_t);
+bool        clip_pop_byte               (CLIP *);
+bool        clip_pop_char               (CLIP *);
+bool        clip_pop_long               (CLIP *);
+bool        clip_pop_voidptr            (CLIP *);
+bool        clip_pop_ucs4               (CLIP *);
 bool        clip_append_clip            (CLIP *, const CLIP *);
-CLIP *      clip_shift                  (CLIP *, size_t);
 size_t      clip_get_size               (const CLIP *);
 size_t      clip_get_capacity           (const CLIP *);
 bool        clip_is_empty               (const CLIP *);
+
+[[nodiscard]] CLIP *clip_shift          (CLIP *, size_t);
 
 #endif

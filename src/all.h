@@ -10,6 +10,7 @@
 #include "obj-client.h"
 #include "obj-server.h"
 #include "obj-user.h"
+#include "signals.h"
 #include "string.h"
 #include "terminal.h"
 #include "utils.h"

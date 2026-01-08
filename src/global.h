@@ -3,6 +3,7 @@
 #define GLOBAL_H_06_01_2026
 ////////////////////////////////////////////////////////////////////////////////
 #include <signal.h>
+#include <limits.h>
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -23,6 +24,11 @@ typedef struct TERMINAL TERMINAL;
 struct global_type {
     struct {
         volatile sig_atomic_t interrupt;
+        volatile sig_atomic_t terminate;
+        volatile sig_atomic_t alarm;
+        volatile sig_atomic_t pipe;
+        volatile sig_atomic_t quit;
+        volatile sig_atomic_t window;
     } signal;
 
     struct {
@@ -37,6 +43,10 @@ struct global_type {
         struct timespec boot;
         struct timespec pulse;
     } time;
+
+    struct {
+        size_t pulse;
+    } count;
 
     struct {
         bool shutdown:1;

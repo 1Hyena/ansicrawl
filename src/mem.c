@@ -235,7 +235,6 @@ MEM *mem_get_metadata(const void *data, size_t alignment) {
     return metadata;
 }
 
-
 CLIP *mem_new_clip() {
     static CLIP zero;
     CLIP *ds = mem_new(alignof(typeof(zero)), sizeof(zero))->data;

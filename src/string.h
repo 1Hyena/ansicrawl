@@ -11,4 +11,8 @@ int str_nprintf(char *buf, size_t bufsz, const char *fmt, ...);
 int str_vnprintf(char *buf, size_t bufsz, const char *fmt, va_list args);
 char *str_mem_vnprintf(char *buf, size_t bufsz, const char *fmt, va_list);
 
+char *str_format(
+    char *buf, size_t len, char *fmt, ...
+) __attribute__((format (printf, 3, 4)));
+
 #endif

@@ -23,6 +23,17 @@ static constexpr char   TERMINAL_ESC_STRIKETHROUGH[]    = "\033[9m";
 static constexpr char   TERMINAL_ESC_RESET[]            = "\033[0m";
 static constexpr char   TERMINAL_ESC_CLEAR_SCREEN[]     = "\x1b[H\x1b[2J";
 
+typedef enum : unsigned char {
+    TERMINAL_STATE_NONE = 0,
+    ////////////////////////////////////////////////////////////////////////////
+    TERMINAL_IDLE,
+    TERMINAL_INIT_EDITOR,
+    TERMINAL_ASK_SCREEN_SIZE,
+    TERMINAL_GET_SCREEN_SIZE,
+    ////////////////////////////////////////////////////////////////////////////
+    MAX_TERMINAL_STATE
+} TERMINAL_STATE;
+
 struct TERMINAL {
     struct termios original;
 
@@ -43,9 +54,13 @@ struct TERMINAL {
         int height;
     } screen;
 
+    TERMINAL_STATE state;
+
     struct {
         bool broken:1;
         bool raw:1;
+        bool reformat:1;
+        bool redraw:1;
     } bitset;
 };
 
