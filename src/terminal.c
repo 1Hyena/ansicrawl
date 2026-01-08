@@ -27,8 +27,10 @@ TERMINAL *terminal_create() {
         return nullptr;
     }
 
-    if ((terminal->io.incoming.clip = clip_create_byte_array()) == nullptr
-    || !(terminal->io.outgoing.clip = clip_create_byte_array())) {
+    if (!(terminal->io.interface.incoming.clip = clip_create_byte_array())
+    ||  !(terminal->io.interface.outgoing.clip = clip_create_byte_array())
+    ||  !(terminal->io.client.incoming.clip = clip_create_byte_array())
+    ||  !(terminal->io.client.outgoing.clip = clip_create_byte_array())) {
         terminal_destroy(terminal);
 
         return nullptr;
@@ -42,8 +44,10 @@ void terminal_destroy(TERMINAL *terminal) {
         return;
     }
 
-    clip_destroy(terminal->io.incoming.clip);
-    clip_destroy(terminal->io.outgoing.clip);
+    clip_destroy(terminal->io.interface.incoming.clip);
+    clip_destroy(terminal->io.interface.outgoing.clip);
+    clip_destroy(terminal->io.client.incoming.clip);
+    clip_destroy(terminal->io.client.outgoing.clip);
 
     mem_free_terminal(terminal);
 }
@@ -68,8 +72,8 @@ static void terminal_disable_raw_mode(TERMINAL *terminal) {
 
     terminal->bitset.raw = false;
 
-    terminal_write(terminal, "\x1b[?47l", 0);
-    terminal_write(terminal, "\x1b" "8", 0);
+    terminal_write_to_interface(terminal, "\x1b[?47l", 0);
+    terminal_write_to_interface(terminal, "\x1b" "8", 0);
 }
 
 static void terminal_enable_raw_mode(TERMINAL *terminal) {
@@ -95,21 +99,20 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
 
     terminal->bitset.raw = true;
 
-    terminal_write(terminal, "\x1b" "7", 0);
-    terminal_write(terminal, "\x1b[?47h", 0);
+    terminal_write_to_interface(terminal, "\x1b" "7", 0);
+    terminal_write_to_interface(terminal, "\x1b[?47h", 0);
 }
 
 static bool terminal_task_get_screen_size(TERMINAL *terminal) {
-    if (!clip_push_byte(terminal->io.incoming.clip, 0)) {
+    CLIP *clip = terminal->io.interface.incoming.clip;
+
+    if (!clip_push_byte(clip, 0)) {
         BUG("failed to get screen size");
         terminal_die(terminal);
         return false;
     }
 
-    const char *buf = (const char *) clip_get_byte_array(
-        terminal->io.incoming.clip
-    );
-
+    const char *buf = (const char *) clip_get_byte_array(clip);
     int rows;
     int cols;
     bool success = false;
@@ -120,7 +123,7 @@ static bool terminal_task_get_screen_size(TERMINAL *terminal) {
         success = true;
     }
 
-    clip_pop_byte(terminal->io.incoming.clip);
+    clip_pop_byte(clip);
 
     if (!success) {
         BUG("failed to get screen size");
@@ -142,8 +145,8 @@ static bool terminal_task_ask_screen_size(TERMINAL *terminal) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        if (!terminal_write(terminal, "\x1b[999C\x1b[999B", 0)
-        ||  !terminal_write(terminal, "\x1b[6n", 0)) {
+        if (!terminal_write_to_interface(terminal, "\x1b[999C\x1b[999B", 0)
+        ||  !terminal_write_to_interface(terminal, "\x1b[6n", 0)) {
             BUG("failed to ask screen size");
             terminal_die(terminal);
             return false;
@@ -240,7 +243,7 @@ static void terminal_redraw_screen(TERMINAL *terminal) {
 
     if (terminal->bitset.broken == false) {
         if (success) {
-            terminal_write(
+            terminal_write_to_interface(
                 terminal, clip_get_char_array(clip), clip_get_size(clip)
             );
         }
@@ -256,23 +259,23 @@ static void terminal_redraw_screen(TERMINAL *terminal) {
 }
 
 static int terminal_read_key(TERMINAL *terminal) {
-    if (clip_is_empty(terminal->io.incoming.clip)) {
+    CLIP *clip = terminal->io.interface.incoming.clip;
+
+    if (clip_is_empty(clip)) {
         FUSE();
         terminal_die(terminal);
         return CTRL_KEY('q');
     }
 
-    char c = (char) clip_get_byte_at(terminal->io.incoming.clip, 0);
+    char c = (char) clip_get_byte_at(clip, 0);
 
-    clip_destroy(clip_shift(terminal->io.incoming.clip, 1));
+    clip_destroy(clip_shift(clip, 1));
 
     if (c == '\x1b') {
         int key = '\x1b';
 
-        if (clip_get_size(terminal->io.incoming.clip) >= 2) {
-            const char *seq = (const char *) clip_get_byte_array(
-                terminal->io.incoming.clip
-            );
+        if (clip_get_size(clip) >= 2) {
+            const char *seq = (const char *) clip_get_byte_array(clip);
 
             if (seq[0] == '[') {
                 switch (seq[1]) {
@@ -286,11 +289,11 @@ static int terminal_read_key(TERMINAL *terminal) {
                 }
             }
 
-            clip_destroy(clip_shift(terminal->io.incoming.clip, 2));
+            clip_destroy(clip_shift(clip, 2));
         }
         else {
             FUSE();
-            clip_clear(terminal->io.incoming.clip);
+            clip_clear(clip);
         }
 
         return key;
@@ -334,7 +337,7 @@ static void terminal_move_cursor(TERMINAL *terminal, int key) {
 }
 
 static void terminal_process_keypress(TERMINAL *terminal) {
-    if (clip_is_empty(terminal->io.incoming.clip)) {
+    if (clip_is_empty(terminal->io.interface.incoming.clip)) {
         return;
     }
 
@@ -452,9 +455,11 @@ void terminal_pulse(TERMINAL *terminal) {
     } while (!terminal->bitset.broken);
 }
 
-bool terminal_write(TERMINAL *terminal, const char *str, size_t len) {
+bool terminal_write_to_interface(
+    TERMINAL *terminal, const char *str, size_t len
+) {
     return clip_append_byte_array(
-        terminal->io.outgoing.clip,
+        terminal->io.interface.outgoing.clip,
         (const uint8_t *) str, len ? len : strlen(str)
     );
 }

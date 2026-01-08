@@ -12,6 +12,7 @@
 #include "server.h"
 #include "signals.h"
 #include "string.h"
+#include "telnet.h"
 #include "terminal.h"
 #include "utils.h"
 ////////////////////////////////////////////////////////////////////////////////

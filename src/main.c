@@ -103,7 +103,9 @@ static void main_io_read() {
     uint8_t buf[MAX_STACKBUF_SIZE];
     ssize_t count = read(STDIN_FILENO, buf, ARRAY_LENGTH(buf));
     auto read_errno = errno;
-    TERMINAL *terminal = global.terminal;
+    CLIP *clip = (
+        global.terminal ? global.terminal->io.interface.incoming.clip : nullptr
+    );
 
     if (count < 0) {
         if (count != -1) {
@@ -123,10 +125,8 @@ static void main_io_read() {
             }
         }
     }
-    else if (terminal && count > 0) {
-        bool appended = clip_append_byte_array(
-            terminal->io.incoming.clip, buf, (size_t) count
-        );
+    else if (clip && count > 0) {
+        bool appended = clip_append_byte_array(clip, buf, (size_t) count);
 
         if (!appended) {
             FUSE();
@@ -141,23 +141,22 @@ static void main_io_read() {
 }
 
 static void main_io_write() {
-    TERMINAL *terminal = global.terminal;
+    CLIP *clip = (
+        global.terminal ? global.terminal->io.interface.outgoing.clip : nullptr
+    );
 
-    if (!terminal || clip_is_empty(terminal->io.outgoing.clip)) {
+    if (!clip || clip_is_empty(clip)) {
         return;
     }
 
     auto written = write(
-        STDOUT_FILENO, clip_get_byte_array(terminal->io.outgoing.clip),
-        clip_get_size(terminal->io.outgoing.clip)
+        STDOUT_FILENO, clip_get_byte_array(clip), clip_get_size(clip)
     );
     auto write_errno = errno;
 
-    if (written != (ssize_t) clip_get_size(terminal->io.outgoing.clip)) {
+    if (written != (ssize_t) clip_get_size(clip)) {
         if (written > 0) {
-            clip_destroy(
-                clip_shift(terminal->io.outgoing.clip, (size_t) written)
-            );
+            clip_destroy(clip_shift(clip, (size_t) written));
         }
         else {
             if (written == -1) {
@@ -179,7 +178,7 @@ static void main_io_write() {
         }
     }
     else {
-        clip_clear(terminal->io.outgoing.clip);
+        clip_clear(clip);
     }
 
     if (written >= 0) {

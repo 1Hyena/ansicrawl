@@ -39,12 +39,24 @@ struct TERMINAL {
 
     struct {
         struct {
-            CLIP *clip;
-        } incoming;
+            struct {
+                CLIP *clip;
+            } incoming;
+
+            struct {
+                CLIP *clip;
+            } outgoing;
+        } interface;
 
         struct {
-            CLIP *clip;
-        } outgoing;
+            struct {
+                CLIP *clip;
+            } incoming;
+
+            struct {
+                CLIP *clip;
+            } outgoing;
+        } client;
     } io;
 
     struct {
@@ -55,6 +67,15 @@ struct TERMINAL {
     } screen;
 
     TERMINAL_STATE state;
+
+    struct {
+        struct {
+            struct {
+                bool recv_will:1;
+                bool sent_do:1;
+            } naws;
+        } client;
+    } telopt;
 
     struct {
         bool broken:1;
@@ -69,6 +90,6 @@ void        terminal_destroy(TERMINAL *);
 void        terminal_init(TERMINAL *);
 void        terminal_deinit(TERMINAL *);
 void        terminal_pulse(TERMINAL *);
-bool        terminal_write(TERMINAL *, const char *str, size_t len);
+bool        terminal_write_to_interface(TERMINAL *, const char *, size_t len);
 
 #endif
