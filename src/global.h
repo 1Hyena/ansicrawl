@@ -40,6 +40,7 @@ struct global_type {
 
     struct {
         bool shutdown:1;
+        bool broken:1;
     } bitset;
 
     TERMINAL *terminal;

@@ -50,6 +50,7 @@ void terminal_destroy(TERMINAL *terminal) {
 
 static void terminal_die(TERMINAL *terminal) {
     terminal->bitset.broken = true;
+    global.bitset.broken = true;
 }
 
 static void terminal_disable_raw_mode(TERMINAL *terminal) {
@@ -175,6 +176,10 @@ static void terminal_init_editor(TERMINAL *terminal) {
 }
 
 void terminal_init(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
     terminal_enable_raw_mode(terminal);
 
     if (terminal->bitset.broken) {
@@ -191,9 +196,11 @@ void terminal_init(TERMINAL *terminal) {
 }
 
 void terminal_deinit(TERMINAL *terminal) {
-    if (terminal) {
-        terminal_disable_raw_mode(terminal);
+    if (!terminal) {
+        return;
     }
+
+    terminal_disable_raw_mode(terminal);
 }
 
 static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
@@ -361,6 +368,13 @@ static void terminal_process_keypress(TERMINAL *terminal) {
 }
 
 void terminal_pulse(TERMINAL *terminal) {
+    if (!terminal) {
+        BUG("not a TTY");
+        global.bitset.broken = true;
+        global.bitset.shutdown = true;
+        return;
+    }
+
     if (terminal->bitset.broken) {
         global.bitset.shutdown = true;
         return;
