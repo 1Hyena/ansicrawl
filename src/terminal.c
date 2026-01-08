@@ -415,6 +415,8 @@ void terminal_pulse(TERMINAL *terminal) {
 
     LOG("%d x %d", terminal->screen.width, terminal->screen.height);
 
+    terminal_read_from_client(terminal);
+
     do {
         switch (terminal->state) {
             case MAX_TERMINAL_STATE:
@@ -455,11 +457,49 @@ void terminal_pulse(TERMINAL *terminal) {
     } while (!terminal->bitset.broken);
 }
 
+bool terminal_read_from_client(TERMINAL *terminal) {
+    CLIP *clip = terminal->io.client.incoming.clip;
+
+    if (clip_is_empty(clip)) {
+        return false;
+    }
+
+    LOG("terminal read from client: %lu", clip_get_size(clip));
+
+    if (clip_get_size(clip) >= 3) {
+        if (clip_get_byte_at(clip, 0) == TELNET_IAC
+        &&  clip_get_byte_at(clip, 1) == TELNET_WILL
+        &&  clip_get_byte_at(clip, 2) == TELNET_OPT_NAWS) {
+            terminal->telopt.client.naws.recv_will = true;
+            terminal_write_to_client(terminal, TELNET_IAC_DO_NAWS, 0);
+            terminal->telopt.client.naws.sent_do = true;
+
+            terminal_write_to_client(terminal, TELNET_IAC_SB_NAWS, 0);
+            terminal_write_to_client(terminal, "0 80 0 24", 0);
+            terminal_write_to_client(terminal, TELNET_IAC_SE, 0);
+
+            LOG("terminal: client wants NAWS");
+        }
+    }
+
+    clip_clear(clip);
+    return true;
+}
+
 bool terminal_write_to_interface(
     TERMINAL *terminal, const char *str, size_t len
 ) {
     return clip_append_byte_array(
         terminal->io.interface.outgoing.clip,
+        (const uint8_t *) str, len ? len : strlen(str)
+    );
+}
+
+bool terminal_write_to_client(
+    TERMINAL *terminal, const char *str, size_t len
+) {
+    return clip_append_byte_array(
+        terminal->io.client.outgoing.clip,
         (const uint8_t *) str, len ? len : strlen(str)
     );
 }

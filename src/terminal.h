@@ -91,6 +91,8 @@ void        terminal_init(TERMINAL *);
 void        terminal_deinit(TERMINAL *);
 void        terminal_pulse(TERMINAL *);
 bool        terminal_write_to_interface(TERMINAL *, const char *, size_t len);
+bool        terminal_write_to_client(TERMINAL *, const char *, size_t len);
+bool        terminal_read_from_client(TERMINAL *);
 void        terminal_flush_outgoing(TERMINAL *);
 void        terminal_fetch_incoming(TERMINAL *);
 
