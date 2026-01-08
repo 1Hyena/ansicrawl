@@ -463,3 +463,79 @@ bool terminal_write_to_interface(
         (const uint8_t *) str, len ? len : strlen(str)
     );
 }
+
+void terminal_fetch_incoming(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
+    {
+        CLIP *src = global.io.incoming.clip;
+
+        if (!clip_is_empty(src)) {
+            CLIP *dst = terminal->io.interface.incoming.clip;
+
+            bool appended = clip_append_clip(dst, src);
+
+            if (!appended) {
+                FUSE();
+            }
+
+            clip_clear(src);
+        }
+    }
+
+    {
+        CLIP *src = global.client->io.terminal.outgoing.clip;
+
+        if (!clip_is_empty(src)) {
+            CLIP *dst = terminal->io.client.incoming.clip;
+
+            bool appended = clip_append_clip(dst, src);
+
+            if (!appended) {
+                FUSE();
+            }
+
+            clip_clear(src);
+        }
+    }
+}
+
+void terminal_flush_outgoing(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
+    {
+        CLIP *src = terminal->io.interface.outgoing.clip;
+
+        if (!clip_is_empty(src)) {
+            CLIP *dst = global.io.outgoing.clip;
+
+            bool appended = clip_append_clip(dst, src);
+
+            if (!appended) {
+                FUSE();
+            }
+
+            clip_clear(src);
+        }
+    }
+
+    {
+        CLIP *src = terminal->io.client.outgoing.clip;
+
+        if (!clip_is_empty(src)) {
+            CLIP *dst = global.client->io.terminal.incoming.clip;
+
+            bool appended = clip_append_clip(dst, src);
+
+            if (!appended) {
+                FUSE();
+            }
+
+            clip_clear(src);
+        }
+    }
+}

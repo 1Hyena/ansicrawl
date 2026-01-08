@@ -54,19 +54,50 @@ bool client_write_to_terminal(CLIENT *client, const char *str, size_t len) {
     );
 }
 
-void client_flush(CLIENT *client) {
-    if (!clip_is_empty(client->io.terminal.outgoing.clip)) {
-        if (global.terminal) {
-            bool appended = clip_append_clip(
-                global.terminal->io.client.incoming.clip,
-                client->io.terminal.outgoing.clip
-            );
+void client_fetch_incoming(CLIENT *client) {
+    if (!client) {
+        return;
+    }
 
-            if (!appended) {
-                FUSE();
-            }
+    CLIP *src = (
+        global.terminal ? (
+            global.terminal->io.client.outgoing.clip
+        ) : global.io.incoming.clip
+    );
+
+    if (!clip_is_empty(src)) {
+        CLIP *dst = client->io.terminal.incoming.clip;
+
+        bool appended = clip_append_clip(dst, src);
+
+        if (!appended) {
+            FUSE();
         }
 
-        clip_clear(client->io.terminal.outgoing.clip);
+        clip_clear(src);
+    }
+}
+
+void client_flush_outgoing(CLIENT *client) {
+    if (!client) {
+        return;
+    }
+
+    CLIP *src = client->io.terminal.outgoing.clip;
+
+    if (!clip_is_empty(src)) {
+        CLIP *dst = (
+            global.terminal ? (
+                global.terminal->io.client.incoming.clip
+            ) : global.io.outgoing.clip
+        );
+
+        bool appended = clip_append_clip(dst, src);
+
+        if (!appended) {
+            FUSE();
+        }
+
+        clip_clear(src);
     }
 }

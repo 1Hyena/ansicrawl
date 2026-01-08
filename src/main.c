@@ -15,8 +15,8 @@ static void main_loop();
 static void main_pulse();
 static void main_init(int argc, char **argv);
 static void main_deinit();
-static void main_io_read();
-static void main_io_write();
+static void main_fetch_incoming();
+static void main_flush_outgoing();
 
 
 int main(int argc, char **argv) {
@@ -51,6 +51,8 @@ static void main_init(int argc, char **argv) {
         __DATE__, __TIME__, TERMINAL_ESC_HIDDEN, TERMINAL_ESC_HIDDEN_RESET
     );
 
+    global.io.incoming.clip = clip_create_byte_array();
+    global.io.outgoing.clip = clip_create_byte_array();
     global.terminal = isatty(STDIN_FILENO) ? terminal_create() : nullptr;
     global.logbuf = clip_create_char_array();
     global.client = client_create();
@@ -64,7 +66,8 @@ static void main_deinit() {
     client_deinit(global.client);
     terminal_deinit(global.terminal);
 
-    main_io_write(); // Terminal deinitialization writes to stdout.
+    terminal_flush_outgoing(global.terminal);
+    main_flush_outgoing();
 
     if (global.bitset.broken) {
         WARN("%s", "abnormal termination");
@@ -85,6 +88,12 @@ static void main_deinit() {
     terminal_destroy(global.terminal);
     global.terminal = nullptr;
 
+    clip_destroy(global.io.incoming.clip);
+    global.io.incoming.clip = nullptr;
+
+    clip_destroy(global.io.outgoing.clip);
+    global.io.outgoing.clip = nullptr;
+
     mem_recycle();
 
     if (mem_get_usage()) {
@@ -99,13 +108,11 @@ static void main_loop() {
     }
 }
 
-static void main_io_read() {
+static void main_fetch_incoming() {
     uint8_t buf[MAX_STACKBUF_SIZE];
     ssize_t count = read(STDIN_FILENO, buf, ARRAY_LENGTH(buf));
     auto read_errno = errno;
-    CLIP *clip = (
-        global.terminal ? global.terminal->io.interface.incoming.clip : nullptr
-    );
+    CLIP *clip = global.io.incoming.clip;
 
     if (count < 0) {
         if (count != -1) {
@@ -140,10 +147,8 @@ static void main_io_read() {
     }
 }
 
-static void main_io_write() {
-    CLIP *clip = (
-        global.terminal ? global.terminal->io.interface.outgoing.clip : nullptr
-    );
+static void main_flush_outgoing() {
+    CLIP *clip = global.io.outgoing.clip;
 
     if (!clip || clip_is_empty(clip)) {
         return;
@@ -192,7 +197,9 @@ static void main_pulse() {
     client_pulse(global.client);
     terminal_pulse(global.terminal);
 
-    main_io_write();
+    client_flush_outgoing(global.client);
+    terminal_flush_outgoing(global.terminal);
+    main_flush_outgoing();
 
     for (auto sig = signals_next(); sig; sig = signals_next()) {
         LOG("signal received (%s)", strsignal(sig));
@@ -225,5 +232,7 @@ static void main_pulse() {
         return;
     }
 
-    main_io_read();
+    main_fetch_incoming();
+    terminal_fetch_incoming(global.terminal);
+    client_fetch_incoming(global.client);
 }

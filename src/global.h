@@ -40,6 +40,16 @@ struct global_type {
     } free;
 
     struct {
+        struct {
+            CLIP *clip;
+        } incoming;
+
+        struct {
+            CLIP *clip;
+        } outgoing;
+    } io;
+
+    struct {
         struct timespec boot;
         struct timespec pulse;
     } time;
@@ -48,15 +58,15 @@ struct global_type {
         size_t pulse;
     } count;
 
-    struct {
-        bool shutdown:1;
-        bool broken:1;
-    } bitset;
-
     TERMINAL *terminal;
     CLIP *logbuf;
     SERVER *server;
     CLIENT *client;
+
+    struct {
+        bool shutdown:1;
+        bool broken:1;
+    } bitset;
 };
 
 extern struct global_type global;

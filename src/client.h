@@ -41,6 +41,7 @@ void    client_init(CLIENT *);
 void    client_deinit(CLIENT *);
 void    client_pulse(CLIENT *);
 bool    client_write_to_terminal(CLIENT *, const char *str, size_t len);
-void    client_flush(CLIENT *);
+void    client_flush_outgoing(CLIENT *);
+void    client_fetch_incoming(CLIENT *);
 
 #endif
