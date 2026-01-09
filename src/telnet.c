@@ -105,8 +105,9 @@ size_t telnet_get_iac_sequence_length(
                         }
                         default: {
                             // Anything other than SE or IAC after IAC actually
-                            // violates the telnet option subnegotiation protcol
-                            // because the meaning of it has not been defined.
+                            // violates the telnet option subnegotiation
+                            // protcol because the meaning of it has not been
+                            // defined.
 
                             continue;
                         }

@@ -111,16 +111,36 @@ size_t telnet_get_iac_nonblocking_length(const unsigned char *, size_t size);
 size_t telnet_get_iac_sequence_length(const unsigned char *, size_t size);
 
 static inline struct telnet_naws_packet_type {
-    uint8_t data[9];
+    uint8_t data[13];
+    uint8_t size;
 } telnet_serialize_naws_message(uint16_t width, uint16_t height) {
-    return (struct telnet_naws_packet_type) {
-        .data = {
-            TELNET_IAC, TELNET_SB, TELNET_OPT_NAWS,
-            (uint8_t) (width  >> 8), (uint8_t) (width  % 256),
-            (uint8_t) (height >> 8), (uint8_t) (height % 256),
-            TELNET_IAC, TELNET_SE
-        }
+    struct telnet_naws_packet_type packet = {
+        .data = { TELNET_IAC, TELNET_SB, TELNET_OPT_NAWS }
     };
+
+    uint8_t byte1 = (uint8_t) (width  >> 8);
+    uint8_t byte2 = (uint8_t) (width  % 256);
+    uint8_t byte3 = (uint8_t) (height >> 8);
+    uint8_t byte4 = (uint8_t) (height % 256);
+    uint8_t i = 3;
+
+    if (byte1 == TELNET_IAC) packet.data[i++] = TELNET_IAC;
+    packet.data[i++] = byte1;
+
+    if (byte2 == TELNET_IAC) packet.data[i++] = TELNET_IAC;
+    packet.data[i++] = byte2;
+
+    if (byte3 == TELNET_IAC) packet.data[i++] = TELNET_IAC;
+    packet.data[i++] = byte3;
+
+    if (byte4 == TELNET_IAC) packet.data[i++] = TELNET_IAC;
+    packet.data[i++] = byte4;
+
+    packet.data[i++] = TELNET_IAC;
+    packet.data[i++] = TELNET_SE;
+    packet.size = i;
+
+    return packet;
 }
 
 static inline struct telnet_naws_message_type {
@@ -129,10 +149,20 @@ static inline struct telnet_naws_message_type {
 } telnet_deserialize_naws_packet(const uint8_t *data, size_t size) {
     struct telnet_naws_message_type packet = {};
 
-    if (size <= 9) {
-        packet.width  = (uint16_t) (data[3] * 256 + data[4]);
-        packet.height = (uint16_t) (data[5] * 256 + data[6]);
+    uint8_t byte[4] = {};
+    size_t b = 0;
+
+    for (size_t i=3; i<size && b < sizeof(byte); ++i) {
+        if (data[i] == TELNET_IAC) {
+            byte[b++] = data[i++];
+            continue;
+        }
+
+        byte[b++] = data[i];
     }
+
+    packet.width  = (uint16_t) (byte[0] * 256 + byte[1]);
+    packet.height = (uint16_t) (byte[2] * 256 + byte[3]);
 
     return packet;
 }

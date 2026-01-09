@@ -414,8 +414,6 @@ bool terminal_update(TERMINAL *terminal) {
 
     bool fetched = terminal_fetch_incoming(terminal);
 
-    while (terminal_read_from_client(terminal));
-
     for (bool repeat = true; repeat && !terminal->bitset.broken;) {
         switch (terminal->state) {
             case MAX_TERMINAL_STATE:
@@ -443,21 +441,30 @@ bool terminal_update(TERMINAL *terminal) {
         }
     }
 
-    if (terminal->telopt.client.naws.recv_will
-    &&  terminal->telopt.client.naws.sent_do) {
-        uint16_t width  = USHORTVAL(terminal->screen.width);
-        uint16_t height = USHORTVAL(terminal->screen.height);
+    if (terminal->screen.width || terminal->screen.height) {
+        // We ignore incoming data from the client until we have determined
+        // the screen size of the terminal. Without this check it may happen
+        // that we report the screen size as 0 x 0.
 
-        if (width  != terminal->telopt.client.naws.state.width
-        ||  height != terminal->telopt.client.naws.state.height) {
-            auto packet = telnet_serialize_naws_message(width, height);
+        while (terminal_read_from_client(terminal));
 
-            terminal_write_to_client(
-                terminal, (const char *) packet.data, ARRAY_LENGTH(packet.data)
-            );
+        if (terminal->telopt.client.naws.recv_will
+        &&  terminal->telopt.client.naws.sent_do) {
+            uint16_t width  = USHORTVAL(terminal->screen.width);
+            uint16_t height = USHORTVAL(terminal->screen.height);
 
-            terminal->telopt.client.naws.state.width = width;
-            terminal->telopt.client.naws.state.height = height;
+            if (width  != terminal->telopt.client.naws.state.width
+            ||  height != terminal->telopt.client.naws.state.height) {
+                auto packet = telnet_serialize_naws_message(width, height);
+
+                terminal_write_to_client(
+                    terminal, (const char *) packet.data,
+                    ARRAY_LENGTH(packet.data)
+                );
+
+                terminal->telopt.client.naws.state.width = width;
+                terminal->telopt.client.naws.state.height = height;
+            }
         }
     }
 
@@ -494,7 +501,6 @@ void terminal_handle_incoming_client_iac(
         terminal->telopt.client.naws.state.width = width;
         terminal->telopt.client.naws.state.height = height;
 
-        LOG("terminal: client wants NAWS");
         return;
     }
 }
