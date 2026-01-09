@@ -40,6 +40,60 @@ void client_init(CLIENT *client) {
 void client_deinit(CLIENT *client) {
 }
 
+void client_handle_incoming_terminal_iac(
+    CLIENT *client, const uint8_t *data, size_t size
+) {
+    if (!data || size < 2 || data[0] != TELNET_IAC) {
+        FUSE();
+        return;
+    }
+
+    if (size == 2) {
+        return;
+    }
+
+    switch (data[2]) {
+        case TELNET_OPT_NAWS: {
+            switch (data[1]) {
+                case TELNET_DO: {
+                    client->telopt.terminal.naws.recv_do = true;
+                    break;
+                }
+                case TELNET_DONT: {
+                    client->telopt.terminal.naws.recv_dont = true;
+
+                    if (!client->telopt.terminal.naws.sent_will
+                    &&  !client->telopt.terminal.naws.sent_wont) {
+                        client_write_to_terminal(
+                            client, TELNET_IAC_WONT_NAWS, 0
+                        );
+
+                        client->telopt.terminal.naws.sent_wont = true;
+                    }
+
+                    break;
+                }
+                case TELNET_SB: {
+                    auto packet = telnet_deserialize_naws_packet(data, size);
+
+                    LOG(
+                        "client: window size is %d x %d",
+                        packet.width, packet.height
+                    );
+
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+
+            break;
+        }
+        default: break;
+    }
+}
+
 void client_pulse(CLIENT *client) {
     client_read_from_terminal(client);
 
@@ -56,44 +110,33 @@ bool client_read_from_terminal(CLIENT *client) {
         return false;
     }
 
-    LOG("client read from terminal: %lu", clip_get_size(clip));
+    const unsigned char *data = clip_get_byte_array(clip);
+    const size_t size = clip_get_size(clip);
 
-    for (;;) {
-        if (clip_get_size(clip) >= 3) {
-            if (clip_get_byte_at(clip, 0) == TELNET_IAC
-            &&  clip_get_byte_at(clip, 2) == TELNET_OPT_NAWS) {
-                if (clip_get_byte_at(clip, 1) == TELNET_DO) {
-                    client->telopt.terminal.naws.recv_do = true;
-                    clip_destroy(clip_shift(clip, 3));
-                    continue;
-                }
-                else if (clip_get_byte_at(clip, 1) == TELNET_DONT) {
-                    client->telopt.terminal.naws.recv_dont = true;
+    size_t nonblocking_sz = telnet_get_iac_nonblocking_length(data, size);
 
-                    if (!client->telopt.terminal.naws.sent_will
-                    &&  !client->telopt.terminal.naws.sent_wont) {
-                        client_write_to_terminal(
-                            client, TELNET_IAC_WONT_NAWS, 0
-                        );
+    if (nonblocking_sz) {
+        CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
+        clip_destroy(nonblocking);
 
-                        client->telopt.terminal.naws.sent_wont = true;
-                    }
-
-                    clip_destroy(clip_shift(clip, 3));
-                    continue;
-                }
-                else if (clip_get_byte_at(clip, 1) == TELNET_SB) {
-                    LOG("client received NAWS data from terminal");
-                }
-                else FUSE();
-            }
-        }
-
-        break;
+        return true;
     }
 
-    clip_clear(clip);
-    return true;
+    size_t blocking_sz = telnet_get_iac_sequence_length(data, size);
+
+    if (blocking_sz) {
+        CLIP *blocking = clip_shift(clip, blocking_sz);
+
+        client_handle_incoming_terminal_iac(
+            client, clip_get_byte_array(blocking), clip_get_size(blocking)
+        );
+
+        clip_destroy(blocking);
+
+        return true;
+    }
+
+    return false;
 }
 
 bool client_write_to_terminal(CLIENT *client, const char *str, size_t len) {

@@ -415,7 +415,25 @@ void terminal_pulse(TERMINAL *terminal) {
 
     LOG("%d x %d", terminal->screen.width, terminal->screen.height);
 
-    terminal_read_from_client(terminal);
+    while (terminal_read_from_client(terminal));
+
+    if (terminal->telopt.client.naws.recv_will
+    &&  terminal->telopt.client.naws.sent_do) {
+        uint16_t width  = USHORTVAL(terminal->screen.width);
+        uint16_t height = USHORTVAL(terminal->screen.height);
+
+        if (width  != terminal->telopt.client.naws.state.width
+        ||  height != terminal->telopt.client.naws.state.height) {
+            auto packet = telnet_serialize_naws_packet(width, height);
+
+            terminal_write_to_client(
+                terminal, (const char *) packet.data, ARRAY_LENGTH(packet.data)
+            );
+
+            terminal->telopt.client.naws.state.width = width;
+            terminal->telopt.client.naws.state.height = height;
+        }
+    }
 
     do {
         switch (terminal->state) {
@@ -457,6 +475,41 @@ void terminal_pulse(TERMINAL *terminal) {
     } while (!terminal->bitset.broken);
 }
 
+void terminal_handle_incoming_client_iac(
+    TERMINAL *terminal, const uint8_t *data, size_t size
+) {
+    if (!data || size < 2 || data[0] != TELNET_IAC) {
+        FUSE();
+        return;
+    }
+
+    if (size == 2) {
+        return;
+    }
+
+    if (data[0] == TELNET_IAC
+    &&  data[1] == TELNET_WILL
+    &&  data[2] == TELNET_OPT_NAWS) {
+        terminal->telopt.client.naws.recv_will = true;
+        terminal_write_to_client(terminal, TELNET_IAC_DO_NAWS, 0);
+        terminal->telopt.client.naws.sent_do = true;
+
+        uint16_t width = USHORTVAL(terminal->screen.width);
+        uint16_t height = USHORTVAL(terminal->screen.height);
+        auto packet = telnet_serialize_naws_packet(width, height);
+
+        terminal_write_to_client(
+            terminal, (const char *) packet.data, ARRAY_LENGTH(packet.data)
+        );
+
+        terminal->telopt.client.naws.state.width = width;
+        terminal->telopt.client.naws.state.height = height;
+
+        LOG("terminal: client wants NAWS");
+        return;
+    }
+}
+
 bool terminal_read_from_client(TERMINAL *terminal) {
     CLIP *clip = terminal->io.client.incoming.clip;
 
@@ -464,26 +517,42 @@ bool terminal_read_from_client(TERMINAL *terminal) {
         return false;
     }
 
-    LOG("terminal read from client: %lu", clip_get_size(clip));
+    const unsigned char *data = clip_get_byte_array(clip);
+    const size_t size = clip_get_size(clip);
 
-    if (clip_get_size(clip) >= 3) {
-        if (clip_get_byte_at(clip, 0) == TELNET_IAC
-        &&  clip_get_byte_at(clip, 1) == TELNET_WILL
-        &&  clip_get_byte_at(clip, 2) == TELNET_OPT_NAWS) {
-            terminal->telopt.client.naws.recv_will = true;
-            terminal_write_to_client(terminal, TELNET_IAC_DO_NAWS, 0);
-            terminal->telopt.client.naws.sent_do = true;
+    size_t nonblocking_sz = telnet_get_iac_nonblocking_length(data, size);
 
-            terminal_write_to_client(terminal, TELNET_IAC_SB_NAWS, 0);
-            terminal_write_to_client(terminal, "0 80 0 24", 0);
-            terminal_write_to_client(terminal, TELNET_IAC_SE, 0);
+    if (nonblocking_sz) {
+        CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
+        CLIP *if_out = terminal->io.interface.outgoing.clip;
 
-            LOG("terminal: client wants NAWS");
+        if (clip_is_empty(if_out)) {
+            clip_swap(if_out, nonblocking);
         }
+        else {
+            clip_append_clip(if_out, nonblocking);
+        }
+
+        clip_destroy(nonblocking);
+
+        return true;
     }
 
-    clip_clear(clip);
-    return true;
+    size_t blocking_sz = telnet_get_iac_sequence_length(data, size);
+
+    if (blocking_sz) {
+        CLIP *blocking = clip_shift(clip, blocking_sz);
+
+        terminal_handle_incoming_client_iac(
+            terminal, clip_get_byte_array(blocking), clip_get_size(blocking)
+        );
+
+        clip_destroy(blocking);
+
+        return true;
+    }
+
+    return false;
 }
 
 bool terminal_write_to_interface(

@@ -4,6 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "global.h"
 ////////////////////////////////////////////////////////////////////////////////
+#include <stdint.h>
+////////////////////////////////////////////////////////////////////////////////
 
 
 struct CLIENT {
@@ -45,5 +47,9 @@ bool    client_read_from_terminal(CLIENT *client);
 bool    client_write_to_terminal(CLIENT *, const char *str, size_t len);
 void    client_flush_outgoing(CLIENT *);
 void    client_fetch_incoming(CLIENT *);
+
+void client_handle_incoming_terminal_iac(
+    CLIENT *, const uint8_t *data, size_t sz
+);
 
 #endif

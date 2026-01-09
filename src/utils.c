@@ -6,6 +6,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+unsigned short to_ushort(long a, const char *file, int line) {
+    if (a > USHRT_MAX) {
+        a = USHRT_MAX;
+        fuse(file, line);
+    }
+    else if (a < 0) {
+        a = 0;
+        fuse(file, line);
+    }
+
+    return (unsigned short) a;
+}
+
 size_t to_size(long a, const char *file, int line) {
     if (a < 0) {
         a = 0;

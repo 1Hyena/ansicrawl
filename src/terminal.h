@@ -73,6 +73,11 @@ struct TERMINAL {
             struct {
                 bool recv_will:1;
                 bool sent_do:1;
+
+                struct {
+                    uint16_t width;
+                    uint16_t height;
+                } state;
             } naws;
         } client;
     } telopt;
@@ -95,5 +100,9 @@ bool        terminal_write_to_client(TERMINAL *, const char *, size_t len);
 bool        terminal_read_from_client(TERMINAL *);
 void        terminal_flush_outgoing(TERMINAL *);
 void        terminal_fetch_incoming(TERMINAL *);
+
+void terminal_handle_incoming_client_iac(
+    TERMINAL *, const uint8_t *data, size_t sz
+);
 
 #endif
