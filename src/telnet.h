@@ -38,6 +38,7 @@ typedef enum : uint8_t {
     TELNET_OPT_SNDLOC       = 23,  // send location
     TELNET_OPT_TTYPE        = 24,  // terminal type
     TELNET_OPT_EOR          = 25,  // end or record
+    TELNET_ANSI_ESC         = 27,  // ANSI escape character
     TELNET_OPT_NAWS         = 31,  // negotiate about window size
     TELNET_OPT_TS           = 32,  // terminal speed
     TELNET_OPT_EOPT         = 36,  // environment option
@@ -65,6 +66,18 @@ typedef enum : uint8_t {
     TELNET_DONT             = 254,
     TELNET_IAC              = 255
 } TELNET_CODE;
+
+static const char TELNET_ANSI_HIDE_CURSOR[] = {
+    (char) TELNET_ANSI_ESC, '[', '?', '2', '5', 'l', '\0'
+};
+
+static const char TELNET_ANSI_SHOW_CURSOR[] = {
+    (char) TELNET_ANSI_ESC, '[', '?', '2', '5', 'h', '\0'
+};
+
+static const char TELNET_ANSI_HOME_CURSOR[] = {
+    (char) TELNET_ANSI_ESC, '[', 'H', '\0'
+};
 
 static const char TELNET_IAC_WILL_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_WILL, (char) TELNET_OPT_NAWS, 0
@@ -99,7 +112,7 @@ size_t telnet_get_iac_sequence_length(const unsigned char *, size_t size);
 
 static inline struct telnet_naws_packet_type {
     uint8_t data[9];
-} telnet_serialize_naws_packet(uint16_t width, uint16_t height) {
+} telnet_serialize_naws_message(uint16_t width, uint16_t height) {
     return (struct telnet_naws_packet_type) {
         .data = {
             TELNET_IAC, TELNET_SB, TELNET_OPT_NAWS,

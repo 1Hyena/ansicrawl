@@ -174,7 +174,7 @@ static bool terminal_task_init_editor(TERMINAL *terminal) {
 
     return true;
 }
-
+/*
 static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
     bool success = true;
     int y;
@@ -220,9 +220,10 @@ static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
         FUSE();
         terminal_die(terminal);
     }
-}
+}*/
 
 static void terminal_redraw_screen(TERMINAL *terminal) {
+    /*
     bool success = true;
     CLIP *clip = clip_create_char_array();
 
@@ -254,6 +255,7 @@ static void terminal_redraw_screen(TERMINAL *terminal) {
     }
 
     clip_destroy(clip);
+    */
 
     terminal->bitset.redraw = false;
 }
@@ -413,8 +415,6 @@ void terminal_pulse(TERMINAL *terminal) {
         return;
     }
 
-    LOG("%d x %d", terminal->screen.width, terminal->screen.height);
-
     while (terminal_read_from_client(terminal));
 
     if (terminal->telopt.client.naws.recv_will
@@ -424,7 +424,7 @@ void terminal_pulse(TERMINAL *terminal) {
 
         if (width  != terminal->telopt.client.naws.state.width
         ||  height != terminal->telopt.client.naws.state.height) {
-            auto packet = telnet_serialize_naws_packet(width, height);
+            auto packet = telnet_serialize_naws_message(width, height);
 
             terminal_write_to_client(
                 terminal, (const char *) packet.data, ARRAY_LENGTH(packet.data)
@@ -496,7 +496,7 @@ void terminal_handle_incoming_client_iac(
 
         uint16_t width = USHORTVAL(terminal->screen.width);
         uint16_t height = USHORTVAL(terminal->screen.height);
-        auto packet = telnet_serialize_naws_packet(width, height);
+        auto packet = telnet_serialize_naws_message(width, height);
 
         terminal_write_to_client(
             terminal, (const char *) packet.data, ARRAY_LENGTH(packet.data)

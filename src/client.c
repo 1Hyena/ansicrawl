@@ -14,7 +14,8 @@ CLIENT *client_create() {
     }
 
     if ((client->io.terminal.incoming.clip = clip_create_byte_array()) ==nullptr
-    || !(client->io.terminal.outgoing.clip = clip_create_byte_array())) {
+    || !(client->io.terminal.outgoing.clip = clip_create_byte_array())
+    || !(client->screen.clip = clip_create_byte_array())) {
         client_destroy(client);
 
         return nullptr;
@@ -30,6 +31,7 @@ void client_destroy(CLIENT *client) {
 
     clip_destroy(client->io.terminal.incoming.clip);
     clip_destroy(client->io.terminal.outgoing.clip);
+    clip_destroy(client->screen.clip);
 
     mem_free_client(client);
 }
@@ -74,12 +76,14 @@ void client_handle_incoming_terminal_iac(
                     break;
                 }
                 case TELNET_SB: {
-                    auto packet = telnet_deserialize_naws_packet(data, size);
+                    auto message = telnet_deserialize_naws_packet(data, size);
 
-                    LOG(
-                        "client: window size is %d x %d",
-                        packet.width, packet.height
-                    );
+                    if (client->screen.width != message.width
+                    ||  client->screen.height != message.height) {
+                        client->screen.width = message.width;
+                        client->screen.height = message.height;
+                        client->bitset.reformat = true;
+                    }
 
                     break;
                 }
@@ -94,12 +98,72 @@ void client_handle_incoming_terminal_iac(
     }
 }
 
+static void client_screen_reformat(CLIENT *client) {
+    client->bitset.reformat = false;
+    client->bitset.redraw = true;
+}
+
+static void client_screen_redraw(CLIENT *client) {
+    client->bitset.redraw = false;
+
+    CLIP *clip = clip_create_byte_array();
+
+    for (size_t y=0; y<client->screen.height; ++y) {
+        for (size_t x=0; x<client->screen.width; ++x) {
+            if (x == 0
+            ||  y == 0
+            ||  x + 1 == client->screen.width
+            ||  y + 1 == client->screen.height) {
+                clip_push_byte(clip, (uint8_t) '#');
+            }
+            else {
+                clip_push_byte(clip, (uint8_t) ' ');
+            }
+        }
+
+        if (y + 1 < client->screen.height) {
+            clip_push_byte(clip, (uint8_t) '\r');
+            clip_push_byte(clip, (uint8_t) '\n');
+        }
+    }
+
+    clip_push_byte(clip, 0);
+
+    size_t hash = str_hash((const char *) clip_get_byte_array(clip));
+
+    if (hash != client->screen.hash) {
+        clip_pop_byte(clip);
+        clip_swap(clip, client->screen.clip);
+        client->screen.hash = hash;
+
+        client_write_to_terminal(client, TELNET_ANSI_HIDE_CURSOR, 0);
+        client_write_to_terminal(client, TELNET_ANSI_HOME_CURSOR, 0);
+        client_write_to_terminal(
+            client,
+            (const char *) clip_get_byte_array(client->screen.clip),
+            clip_get_size(client->screen.clip)
+        );
+        client_write_to_terminal(client, TELNET_ANSI_HOME_CURSOR, 0);
+        client_write_to_terminal(client, TELNET_ANSI_SHOW_CURSOR, 0);
+    }
+
+    clip_destroy(clip);
+}
+
 void client_pulse(CLIENT *client) {
-    client_read_from_terminal(client);
+    while (client_read_from_terminal(client));
 
     if (!client->telopt.terminal.naws.sent_will) {
         client_write_to_terminal(client, TELNET_IAC_WILL_NAWS, 0);
         client->telopt.terminal.naws.sent_will = true;
+    }
+
+    if (client->bitset.reformat) {
+        client_screen_reformat(client);
+    }
+
+    if (client->bitset.redraw) {
+        client_screen_redraw(client);
     }
 }
 

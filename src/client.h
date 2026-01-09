@@ -22,8 +22,10 @@ struct CLIENT {
     } io;
 
     struct {
-        size_t width;
-        size_t height;
+        size_t  width;
+        size_t  height;
+        CLIP *  clip;
+        size_t  hash;
     } screen;
 
     struct {
@@ -36,6 +38,11 @@ struct CLIENT {
             } naws;
         } terminal;
     } telopt;
+
+    struct {
+        bool reformat:1;
+        bool redraw:1;
+    } bitset;
 };
 
 CLIENT *client_create();
