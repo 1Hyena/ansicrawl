@@ -94,12 +94,12 @@ TERMINAL *  terminal_create();
 void        terminal_destroy(TERMINAL *);
 void        terminal_init(TERMINAL *);
 void        terminal_deinit(TERMINAL *);
-void        terminal_pulse(TERMINAL *);
+bool        terminal_update(TERMINAL *);
 bool        terminal_write_to_interface(TERMINAL *, const char *, size_t len);
 bool        terminal_write_to_client(TERMINAL *, const char *, size_t len);
 bool        terminal_read_from_client(TERMINAL *);
-void        terminal_flush_outgoing(TERMINAL *);
-void        terminal_fetch_incoming(TERMINAL *);
+bool        terminal_flush_outgoing(TERMINAL *);
+bool        terminal_fetch_incoming(TERMINAL *);
 
 void terminal_handle_incoming_client_iac(
     TERMINAL *, const uint8_t *data, size_t sz

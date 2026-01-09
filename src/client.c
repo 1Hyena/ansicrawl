@@ -150,7 +150,13 @@ static void client_screen_redraw(CLIENT *client) {
     clip_destroy(clip);
 }
 
-void client_pulse(CLIENT *client) {
+bool client_update(CLIENT *client) {
+    if (!client) {
+        return false;
+    }
+
+    bool fetched = client_fetch_incoming(client);
+
     while (client_read_from_terminal(client));
 
     if (!client->telopt.terminal.naws.sent_will) {
@@ -165,6 +171,8 @@ void client_pulse(CLIENT *client) {
     if (client->bitset.redraw) {
         client_screen_redraw(client);
     }
+
+    return client_flush_outgoing(client) || fetched;
 }
 
 bool client_read_from_terminal(CLIENT *client) {
@@ -210,9 +218,9 @@ bool client_write_to_terminal(CLIENT *client, const char *str, size_t len) {
     );
 }
 
-void client_fetch_incoming(CLIENT *client) {
+bool client_fetch_incoming(CLIENT *client) {
     if (!client) {
-        return;
+        return false;
     }
 
     CLIP *src = (
@@ -231,12 +239,16 @@ void client_fetch_incoming(CLIENT *client) {
         }
 
         clip_clear(src);
+
+        return true;
     }
+
+    return false;
 }
 
-void client_flush_outgoing(CLIENT *client) {
+bool client_flush_outgoing(CLIENT *client) {
     if (!client) {
-        return;
+        return false;
     }
 
     CLIP *src = client->io.terminal.outgoing.clip;
@@ -255,5 +267,9 @@ void client_flush_outgoing(CLIENT *client) {
         }
 
         clip_clear(src);
+
+        return true;
     }
+
+    return false;
 }

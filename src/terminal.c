@@ -184,7 +184,7 @@ static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
             char welcome[80];
             int welcomelen = snprintf(
                 welcome, sizeof(welcome),
-                "ANSI Crawl -- pulse %lu", global.count.pulse
+                "ANSI Crawl -- update %lu", global.count.update
             );
 
             if (welcomelen > terminal->screen.width) {
@@ -402,20 +402,46 @@ void terminal_deinit(TERMINAL *terminal) {
     terminal->state = TERMINAL_STATE_NONE;
 }
 
-void terminal_pulse(TERMINAL *terminal) {
+bool terminal_update(TERMINAL *terminal) {
     if (!terminal) {
-        BUG("not a TTY");
-        global.bitset.broken = true;
-        global.bitset.shutdown = true;
-        return;
+        return false;
     }
 
     if (terminal->bitset.broken) {
         global.bitset.shutdown = true;
-        return;
+        return false;
     }
 
+    bool fetched = terminal_fetch_incoming(terminal);
+
     while (terminal_read_from_client(terminal));
+
+    for (bool repeat = true; repeat && !terminal->bitset.broken;) {
+        switch (terminal->state) {
+            case MAX_TERMINAL_STATE:
+            case TERMINAL_STATE_NONE: {
+                FUSE();
+                terminal_die(terminal);
+                return false;
+            }
+            case TERMINAL_ASK_SCREEN_SIZE: {
+                repeat = terminal_task_ask_screen_size(terminal);
+                break;
+            }
+            case TERMINAL_GET_SCREEN_SIZE: {
+                repeat = terminal_task_get_screen_size(terminal);
+                break;
+            }
+            case TERMINAL_INIT_EDITOR: {
+                repeat = terminal_task_init_editor(terminal);
+                break;
+            }
+            case TERMINAL_IDLE: {
+                repeat = terminal_task_idle(terminal);
+                break;
+            }
+        }
+    }
 
     if (terminal->telopt.client.naws.recv_will
     &&  terminal->telopt.client.naws.sent_do) {
@@ -435,44 +461,7 @@ void terminal_pulse(TERMINAL *terminal) {
         }
     }
 
-    do {
-        switch (terminal->state) {
-            case MAX_TERMINAL_STATE:
-            case TERMINAL_STATE_NONE: {
-                FUSE();
-                terminal_die(terminal);
-                return;
-            }
-            case TERMINAL_ASK_SCREEN_SIZE: {
-                if (!terminal_task_ask_screen_size(terminal)) {
-                    return;
-                }
-
-                break;
-            }
-            case TERMINAL_GET_SCREEN_SIZE: {
-                if (!terminal_task_get_screen_size(terminal)) {
-                    return;
-                }
-
-                break;
-            }
-            case TERMINAL_INIT_EDITOR: {
-                if (!terminal_task_init_editor(terminal)) {
-                    return;
-                }
-
-                break;
-            }
-            case TERMINAL_IDLE: {
-                if (!terminal_task_idle(terminal)) {
-                    return;
-                }
-
-                break;
-            }
-        }
-    } while (!terminal->bitset.broken);
+    return terminal_flush_outgoing(terminal) || fetched;
 }
 
 void terminal_handle_incoming_client_iac(
@@ -573,10 +562,12 @@ bool terminal_write_to_client(
     );
 }
 
-void terminal_fetch_incoming(TERMINAL *terminal) {
+bool terminal_fetch_incoming(TERMINAL *terminal) {
     if (!terminal) {
-        return;
+        return false;
     }
+
+    bool fetched = false;
 
     {
         CLIP *src = global.io.incoming.clip;
@@ -591,6 +582,8 @@ void terminal_fetch_incoming(TERMINAL *terminal) {
             }
 
             clip_clear(src);
+
+            fetched = true;
         }
     }
 
@@ -607,14 +600,20 @@ void terminal_fetch_incoming(TERMINAL *terminal) {
             }
 
             clip_clear(src);
+
+            fetched = true;
         }
     }
+
+    return fetched;
 }
 
-void terminal_flush_outgoing(TERMINAL *terminal) {
+bool terminal_flush_outgoing(TERMINAL *terminal) {
     if (!terminal) {
-        return;
+        return false;
     }
+
+    bool flushed = false;
 
     {
         CLIP *src = terminal->io.interface.outgoing.clip;
@@ -629,6 +628,8 @@ void terminal_flush_outgoing(TERMINAL *terminal) {
             }
 
             clip_clear(src);
+
+            flushed = true;
         }
     }
 
@@ -645,6 +646,10 @@ void terminal_flush_outgoing(TERMINAL *terminal) {
             }
 
             clip_clear(src);
+
+            flushed = true;
         }
     }
+
+    return flushed;
 }

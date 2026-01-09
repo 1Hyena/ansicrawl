@@ -12,11 +12,11 @@
 
 
 static void main_loop();
-static void main_pulse();
+static bool main_update();
 static void main_init(int argc, char **argv);
 static void main_deinit();
-static void main_fetch_incoming();
-static void main_flush_outgoing();
+static bool main_fetch_incoming();
+static bool main_flush_outgoing();
 
 
 int main(int argc, char **argv) {
@@ -37,7 +37,7 @@ static void main_init(int argc, char **argv) {
     }
 
     timespec_get(&global.time.boot, TIME_UTC);
-    global.time.pulse = global.time.boot;
+    global.time.update = global.time.boot;
 
     LOG("using locale: %s", setlocale(LC_ALL, nullptr));
 
@@ -104,11 +104,11 @@ static void main_deinit() {
 
 static void main_loop() {
     while (!global.bitset.shutdown) {
-        main_pulse();
+        main_update();
     }
 }
 
-static void main_fetch_incoming() {
+static bool main_fetch_incoming() {
     uint8_t buf[MAX_STACKBUF_SIZE];
     ssize_t count = read(STDIN_FILENO, buf, ARRAY_LENGTH(buf));
     auto read_errno = errno;
@@ -128,7 +128,7 @@ static void main_fetch_incoming() {
             default: {
                 BUG("%s", strerror(read_errno));
                 global.bitset.broken = true;
-                return;
+                return false;
             }
         }
     }
@@ -138,20 +138,22 @@ static void main_fetch_incoming() {
         if (!appended) {
             FUSE();
             global.bitset.broken = true;
-            return;
+            return false;
         }
     }
 
     if (count >= 0) {
         LOG("%lu read", (size_t) count);
     }
+
+    return count > 0;
 }
 
-static void main_flush_outgoing() {
+static bool main_flush_outgoing() {
     CLIP *clip = global.io.outgoing.clip;
 
     if (!clip || clip_is_empty(clip)) {
-        return;
+        return false;
     }
 
     auto written = write(
@@ -189,17 +191,13 @@ static void main_flush_outgoing() {
     if (written >= 0) {
         LOG("%lu written", (size_t) written);
     }
+
+    return written > 0;
 }
 
-static void main_pulse() {
-    global.count.pulse++;
-
-    client_pulse(global.client);
-    terminal_pulse(global.terminal);
-
-    client_flush_outgoing(global.client);
-    terminal_flush_outgoing(global.terminal);
-    main_flush_outgoing();
+static bool main_update() {
+    global.count.update++;
+    LOG("main update %lu", global.count.update);
 
     for (auto sig = signals_next(); sig; sig = signals_next()) {
         LOG("signal received (%s)", strsignal(sig));
@@ -229,10 +227,20 @@ static void main_pulse() {
     }
 
     if (global.bitset.shutdown) {
-        return;
+        return false;
     }
 
-    main_fetch_incoming();
-    terminal_fetch_incoming(global.terminal);
-    client_fetch_incoming(global.client);
+    bool updated = false;
+
+    updated |= client_update(global.client);
+    updated |= terminal_update(global.terminal);
+
+    main_flush_outgoing();
+
+    if (!updated) {
+        LOG("waiting for user input");
+        updated |= main_fetch_incoming();
+    }
+
+    return updated;
 }

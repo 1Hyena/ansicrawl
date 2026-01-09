@@ -51,11 +51,11 @@ struct global_type {
 
     struct {
         struct timespec boot;
-        struct timespec pulse;
+        struct timespec update;
     } time;
 
     struct {
-        size_t pulse;
+        size_t update;
     } count;
 
     TERMINAL *terminal;
