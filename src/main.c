@@ -66,7 +66,6 @@ static void main_deinit() {
     client_deinit(global.client);
     terminal_deinit(global.terminal);
 
-    terminal_flush_outgoing(global.terminal);
     main_flush_outgoing();
 
     if (global.bitset.broken) {
@@ -103,10 +102,10 @@ static void main_deinit() {
 }
 
 static void main_loop() {
-    while (!global.bitset.shutdown) {
+    while (!global.bitset.broken) {
         if (!main_update()) {
-            global.bitset.shutdown = true;
-            LOG("work complete");
+            LOG("shutting down");
+            break;
         }
     }
 }
@@ -152,10 +151,27 @@ static bool main_fetch_incoming() {
     return count > 0 || global.terminal;
 }
 
+static void main_flush_logbuf() {
+    if (global.terminal && global.terminal->bitset.raw) {
+        return;
+    }
+
+    if (global.logbuf && !clip_is_empty(global.logbuf)) {
+        (void)!write(
+            STDERR_FILENO,
+            clip_get_char_array(global.logbuf),
+            clip_get_size(global.logbuf)
+        );
+
+        clip_clear(global.logbuf);
+    }
+}
+
 static bool main_flush_outgoing() {
     CLIP *clip = global.io.outgoing.clip;
 
     if (!clip || clip_is_empty(clip)) {
+        main_flush_logbuf();
         return false;
     }
 
@@ -195,6 +211,8 @@ static bool main_flush_outgoing() {
         LOG("%lu written", (size_t) written);
     }
 
+    main_flush_logbuf();
+
     return written > 0;
 }
 
@@ -229,10 +247,6 @@ static bool main_update() {
         global.bitset.shutdown = true;
     }
 
-    if (global.bitset.shutdown) {
-        return false;
-    }
-
     bool updated = false;
 
     updated |= client_update(global.client);
@@ -240,9 +254,13 @@ static bool main_update() {
 
     main_flush_outgoing();
 
-    if (!updated) {
+    if (!updated && !global.bitset.shutdown) {
         LOG("waiting for user input");
         updated |= main_fetch_incoming();
+
+        if (!updated) {
+            global.bitset.shutdown = true;
+        }
     }
 
     return updated;

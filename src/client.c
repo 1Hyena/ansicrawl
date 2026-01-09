@@ -42,6 +42,15 @@ void client_init(CLIENT *client) {
 void client_deinit(CLIENT *client) {
 }
 
+void client_shutdown(CLIENT *client) {
+    if (!client || client->bitset.shutdown) {
+        return;
+    }
+
+    client_write_to_terminal(client, "\x1b[9999;1H", 0);
+    client->bitset.shutdown = true;
+}
+
 void client_handle_incoming_terminal_iac(
     CLIENT *client, const uint8_t *data, size_t size
 ) {
@@ -179,18 +188,9 @@ static void client_screen_redraw(CLIENT *client) {
     clip_destroy(clip);
 }
 
-bool client_update(CLIENT *client) {
-    if (!client) {
-        return false;
-    }
-
-    bool fetched = client_fetch_incoming(client);
-
-    while (client_read_from_terminal(client));
-
-    if (!client->telopt.terminal.naws.sent_do) {
-        client_write_to_terminal(client, TELNET_IAC_DO_NAWS, 0);
-        client->telopt.terminal.naws.sent_do = true;
+static void client_update_screen(CLIENT *client) {
+    if (client->bitset.shutdown) {
+        return;
     }
 
     if (client->bitset.reformat) {
@@ -200,6 +200,34 @@ bool client_update(CLIENT *client) {
     if (client->bitset.redraw) {
         client_screen_redraw(client);
     }
+}
+
+static void client_update_terminal(CLIENT *client) {
+    if (client->bitset.shutdown) {
+        return;
+    }
+
+    if (!client->telopt.terminal.naws.sent_do) {
+        client_write_to_terminal(client, TELNET_IAC_DO_NAWS, 0);
+        client->telopt.terminal.naws.sent_do = true;
+    }
+}
+
+bool client_update(CLIENT *client) {
+    if (!client || client->bitset.shutdown) {
+        return false;
+    }
+
+    if (global.bitset.shutdown) {
+        client_shutdown(client);
+    }
+
+    bool fetched = client_fetch_incoming(client);
+
+    while (client_read_from_terminal(client));
+
+    client_update_terminal(client);
+    client_update_screen(client);
 
     return client_flush_outgoing(client) || fetched;
 }
@@ -241,6 +269,8 @@ bool client_read_from_terminal(CLIENT *client) {
 }
 
 bool client_write_to_terminal(CLIENT *client, const char *str, size_t len) {
+    client->io.terminal.outgoing.total += len;
+
     return clip_append_byte_array(
         client->io.terminal.outgoing.clip,
         (const uint8_t *) str, len ? len : strlen(str)

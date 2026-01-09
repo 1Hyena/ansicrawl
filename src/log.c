@@ -13,18 +13,13 @@
 void log_part(const char *str, size_t len) {
     if (!global.terminal
     || (!global.terminal->bitset.raw)) {
-        if (global.logbuf && !clip_is_empty(global.logbuf)) {
-            (void)!write(
-                STDERR_FILENO,
-                clip_get_char_array(global.logbuf), clip_get_size(global.logbuf)
-            );
-
-            clip_clear(global.logbuf);
+        if (!global.logbuf || clip_is_empty(global.logbuf)) {
+            (void)!write(STDERR_FILENO, str, len);
+            return;
         }
-
-        (void)!write(STDERR_FILENO, str, len);
     }
-    else if (global.logbuf) {
+
+    if (global.logbuf) {
         clip_append_char_array(global.logbuf, str, len);
     }
 }

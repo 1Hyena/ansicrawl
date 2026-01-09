@@ -70,10 +70,12 @@ static void terminal_disable_raw_mode(TERMINAL *terminal) {
         return;
     }
 
-    terminal->bitset.raw = false;
-
     terminal_write_to_interface(terminal, "\x1b[?47l", 0);
     terminal_write_to_interface(terminal, "\x1b" "8", 0);
+    terminal_flush_outgoing(terminal);
+
+    terminal->bitset.raw = false;
+    LOG("terminal: disabled raw mode");
 }
 
 static void terminal_enable_raw_mode(TERMINAL *terminal) {
@@ -101,6 +103,7 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
 
     terminal_write_to_interface(terminal, "\x1b" "7", 0);
     terminal_write_to_interface(terminal, "\x1b[?47h", 0);
+    LOG("terminal: enabled raw mode");
 }
 
 static bool terminal_task_get_screen_size(TERMINAL *terminal) {
@@ -402,17 +405,18 @@ void terminal_deinit(TERMINAL *terminal) {
     terminal->state = TERMINAL_STATE_NONE;
 }
 
-bool terminal_update(TERMINAL *terminal) {
-    if (!terminal) {
-        return false;
+void terminal_shutdown(TERMINAL *terminal) {
+    if (!terminal || terminal->bitset.shutdown) {
+        return;
     }
 
-    if (terminal->bitset.broken) {
-        global.bitset.shutdown = true;
-        return false;
-    }
+    terminal->bitset.shutdown = true;
+}
 
-    bool fetched = terminal_fetch_incoming(terminal);
+static void terminal_update_state(TERMINAL *terminal) {
+    if (terminal->bitset.shutdown) {
+        return;
+    }
 
     for (bool repeat = true; repeat && !terminal->bitset.broken;) {
         switch (terminal->state) {
@@ -420,7 +424,7 @@ bool terminal_update(TERMINAL *terminal) {
             case TERMINAL_STATE_NONE: {
                 FUSE();
                 terminal_die(terminal);
-                return false;
+                return;
             }
             case TERMINAL_ASK_SCREEN_SIZE: {
                 repeat = terminal_task_ask_screen_size(terminal);
@@ -440,13 +444,18 @@ bool terminal_update(TERMINAL *terminal) {
             }
         }
     }
+}
+
+static void terminal_update_client(TERMINAL *terminal) {
+    if (terminal->screen.width
+    ||  terminal->screen.height
+    ||  terminal->bitset.shutdown) {
+        while (terminal_read_from_client(terminal));
+    }
 
     if (terminal->screen.width || terminal->screen.height) {
-        // We ignore incoming data from the client until we have determined
-        // the screen size of the terminal. Without this check it may happen
-        // that we report the screen size as 0 x 0.
-
-        while (terminal_read_from_client(terminal));
+        // Without this check it may happen that we report the screen size as
+        // 0 x 0.
 
         if (terminal->telopt.client.naws.recv_do
         &&  terminal->telopt.client.naws.sent_will) {
@@ -467,6 +476,26 @@ bool terminal_update(TERMINAL *terminal) {
             }
         }
     }
+}
+
+bool terminal_update(TERMINAL *terminal) {
+    if (!terminal) {
+        return false;
+    }
+
+    if (terminal->bitset.broken) {
+        global.bitset.shutdown = true;
+        return false;
+    }
+
+    if (global.bitset.shutdown) {
+        terminal_shutdown(terminal);
+    }
+
+    bool fetched = terminal_fetch_incoming(terminal);
+
+    terminal_update_state(terminal);
+    terminal_update_client(terminal);
 
     return terminal_flush_outgoing(terminal) || fetched;
 }
@@ -562,6 +591,10 @@ bool terminal_write_to_interface(
 bool terminal_write_to_client(
     TERMINAL *terminal, const char *str, size_t len
 ) {
+    if (terminal->bitset.shutdown) {
+        return true;
+    }
+
     return clip_append_byte_array(
         terminal->io.client.outgoing.clip,
         (const uint8_t *) str, len ? len : strlen(str)

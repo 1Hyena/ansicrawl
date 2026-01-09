@@ -83,6 +83,7 @@ struct TERMINAL {
     } telopt;
 
     struct {
+        bool shutdown:1;
         bool broken:1;
         bool raw:1;
         bool reformat:1;
@@ -100,6 +101,7 @@ bool        terminal_write_to_client(TERMINAL *, const char *, size_t len);
 bool        terminal_read_from_client(TERMINAL *);
 bool        terminal_flush_outgoing(TERMINAL *);
 bool        terminal_fetch_incoming(TERMINAL *);
+void        terminal_shutdown(TERMINAL *);
 
 void terminal_handle_incoming_client_iac(
     TERMINAL *, const uint8_t *data, size_t sz

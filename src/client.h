@@ -17,6 +17,7 @@ struct CLIENT {
 
             struct {
                 CLIP *clip;
+                size_t total;
             } outgoing;
         } terminal;
     } io;
@@ -40,6 +41,7 @@ struct CLIENT {
     } telopt;
 
     struct {
+        bool shutdown:1;
         bool reformat:1;
         bool redraw:1;
     } bitset;
@@ -54,6 +56,7 @@ bool    client_read_from_terminal(CLIENT *client);
 bool    client_write_to_terminal(CLIENT *, const char *str, size_t len);
 bool    client_flush_outgoing(CLIENT *);
 bool    client_fetch_incoming(CLIENT *);
+void    client_shutdown(CLIENT *);
 
 void client_handle_incoming_terminal_iac(
     CLIENT *, const uint8_t *data, size_t sz
