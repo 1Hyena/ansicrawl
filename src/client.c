@@ -54,23 +54,52 @@ void client_handle_incoming_terminal_iac(
         return;
     }
 
+    {
+        char stackbuf[MAX_STACKBUF_SIZE] = "";
+
+        for (size_t i = 0; i<size; ++i) {
+            const char *code = telnet_get_iac_sequence_code(data, size, i);
+
+            if (code == nullptr) {
+                code = "NUL";
+                FUSE();
+            }
+
+            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
+                LOG("client: long IAC sequence (size %lu)", size);
+
+                break;
+            }
+
+            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
+
+            if (i + 1 < size) {
+                strncat(
+                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
+                );
+            }
+        }
+
+        LOG("client: got %s", stackbuf);
+    }
+
     switch (data[2]) {
         case TELNET_OPT_NAWS: {
             switch (data[1]) {
-                case TELNET_DO: {
-                    client->telopt.terminal.naws.recv_do = true;
+                case TELNET_WILL: {
+                    client->telopt.terminal.naws.recv_will = true;
                     break;
                 }
-                case TELNET_DONT: {
-                    client->telopt.terminal.naws.recv_dont = true;
+                case TELNET_WONT: {
+                    client->telopt.terminal.naws.recv_wont = true;
 
-                    if (!client->telopt.terminal.naws.sent_will
-                    &&  !client->telopt.terminal.naws.sent_wont) {
+                    if (!client->telopt.terminal.naws.sent_do
+                    &&  !client->telopt.terminal.naws.sent_dont) {
                         client_write_to_terminal(
-                            client, TELNET_IAC_WONT_NAWS, 0
+                            client, TELNET_IAC_DONT_NAWS, 0
                         );
 
-                        client->telopt.terminal.naws.sent_wont = true;
+                        client->telopt.terminal.naws.sent_dont = true;
                     }
 
                     break;
@@ -159,9 +188,9 @@ bool client_update(CLIENT *client) {
 
     while (client_read_from_terminal(client));
 
-    if (!client->telopt.terminal.naws.sent_will) {
-        client_write_to_terminal(client, TELNET_IAC_WILL_NAWS, 0);
-        client->telopt.terminal.naws.sent_will = true;
+    if (!client->telopt.terminal.naws.sent_do) {
+        client_write_to_terminal(client, TELNET_IAC_DO_NAWS, 0);
+        client->telopt.terminal.naws.sent_do = true;
     }
 
     if (client->bitset.reformat) {

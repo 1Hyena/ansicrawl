@@ -448,8 +448,8 @@ bool terminal_update(TERMINAL *terminal) {
 
         while (terminal_read_from_client(terminal));
 
-        if (terminal->telopt.client.naws.recv_will
-        &&  terminal->telopt.client.naws.sent_do) {
+        if (terminal->telopt.client.naws.recv_do
+        &&  terminal->telopt.client.naws.sent_will) {
             uint16_t width  = USHORTVAL(terminal->screen.width);
             uint16_t height = USHORTVAL(terminal->screen.height);
 
@@ -484,11 +484,11 @@ void terminal_handle_incoming_client_iac(
     }
 
     if (data[0] == TELNET_IAC
-    &&  data[1] == TELNET_WILL
+    &&  data[1] == TELNET_DO
     &&  data[2] == TELNET_OPT_NAWS) {
-        terminal->telopt.client.naws.recv_will = true;
-        terminal_write_to_client(terminal, TELNET_IAC_DO_NAWS, 0);
-        terminal->telopt.client.naws.sent_do = true;
+        terminal->telopt.client.naws.recv_do = true;
+        terminal_write_to_client(terminal, TELNET_IAC_WILL_NAWS, 0);
+        terminal->telopt.client.naws.sent_will = true;
 
         uint16_t width = USHORTVAL(terminal->screen.width);
         uint16_t height = USHORTVAL(terminal->screen.height);

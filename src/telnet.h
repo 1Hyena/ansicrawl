@@ -91,6 +91,10 @@ static const char TELNET_IAC_DO_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_DO, (char) TELNET_OPT_NAWS, 0
 };
 
+static const char TELNET_IAC_DONT_NAWS[] = {
+    (char) TELNET_IAC, (char) TELNET_DONT, (char) TELNET_OPT_NAWS, 0
+};
+
 static const char TELNET_IAC_SB_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_SB, (char) TELNET_OPT_NAWS, 0
 };

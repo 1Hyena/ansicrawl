@@ -104,7 +104,10 @@ static void main_deinit() {
 
 static void main_loop() {
     while (!global.bitset.shutdown) {
-        main_update();
+        if (!main_update()) {
+            global.bitset.shutdown = true;
+            LOG("work complete");
+        }
     }
 }
 
@@ -123,7 +126,7 @@ static bool main_fetch_incoming() {
             case EAGAIN:
             case EINTR: {
                 LOG("%s: %s", __func__, strerror(read_errno));
-                break;
+                return true;
             }
             default: {
                 BUG("%s", strerror(read_errno));
@@ -146,7 +149,7 @@ static bool main_fetch_incoming() {
         LOG("%lu read", (size_t) count);
     }
 
-    return count > 0;
+    return count > 0 || global.terminal;
 }
 
 static bool main_flush_outgoing() {

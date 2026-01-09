@@ -71,8 +71,8 @@ struct TERMINAL {
     struct {
         struct {
             struct {
-                bool recv_will:1;
-                bool sent_do:1;
+                bool recv_do:1;
+                bool sent_will:1;
 
                 struct {
                     uint16_t width;

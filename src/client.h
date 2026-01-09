@@ -31,10 +31,10 @@ struct CLIENT {
     struct {
         struct {
             struct {
-                bool sent_will:1;
-                bool sent_wont:1;
-                bool recv_do:1;
-                bool recv_dont:1;
+                bool sent_do:1;
+                bool sent_dont:1;
+                bool recv_will:1;
+                bool recv_wont:1;
             } naws;
         } terminal;
     } telopt;
