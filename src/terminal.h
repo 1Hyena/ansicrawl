@@ -10,6 +10,12 @@
 
 
 typedef enum : uint8_t {
+    TERMINAL_KEY_NONE = 0,
+    ///////////////////////////////////////////////////////////////////////////
+    TERMINAL_KEY_UP, TERMINAL_KEY_DOWN, TERMINAL_KEY_LEFT, TERMINAL_KEY_RIGHT
+} TERMINAL_KEY;
+
+typedef enum : uint8_t {
     TERMINAL_CTRL_Q = ('q' & 0x1f),
     TERMINAL_CTRL_C = ('c' & 0x1f),
     TERMINAL_CTRL_D = ('d' & 0x1f)

@@ -25,6 +25,9 @@ static void client_handle_incoming_terminal_txt(
 static bool client_handle_incoming_terminal_txt_ctrl_key(
     CLIENT *, const uint8_t *data, size_t sz
 );
+static bool client_handle_incoming_terminal_esc_arrow_key(
+    CLIENT *client, const uint8_t *data, size_t size
+);
 static size_t client_get_esc_blocking_length(
     const unsigned char *data, size_t size
 );
@@ -186,6 +189,14 @@ static void client_handle_incoming_terminal_esc(
         }
 
         LOG("terminal:esc -> client: %s", stackbuf);
+    }
+
+    bool handled = client_handle_incoming_terminal_esc_arrow_key(
+        client, data, size
+    );
+
+    if (handled) {
+        return;
     }
 }
 
@@ -594,6 +605,77 @@ static bool client_flush_outgoing(CLIENT *client) {
     return false;
 }
 
+static struct client_incoming_terminal_esc_arrow_key_type{
+    const char *end;
+    const char *str;
+    size_t size;
+    TERMINAL_KEY key;
+} client_parse_incoming_terminal_esc_arrow_key(
+    const char *str, size_t str_sz
+) {
+    struct client_incoming_terminal_esc_arrow_key_type result = {
+        .end = str
+    };
+
+    if (str_sz <= 2 || *str != TERMINAL_ESC || str[1] != '[') {
+        return result;
+    }
+
+    const char *s = str + 2;
+    const char *next = s;
+
+    next = str_seg_skip_utf8_symbol(s, str_sz - SIZEVAL(s - str));
+
+    if (next == s) return result;
+
+    result.str = s;
+    result.size = SIZEVAL(next - s);
+    result.end = next;
+
+    switch (*s) {
+        case 'A': result.key = TERMINAL_KEY_UP; break;
+        case 'B': result.key = TERMINAL_KEY_DOWN; break;
+        case 'C': result.key = TERMINAL_KEY_RIGHT; break;
+        case 'D': result.key = TERMINAL_KEY_LEFT; break;
+        default: break;
+    }
+
+    return result;
+}
+
+static bool client_handle_incoming_terminal_esc_arrow_key(
+    CLIENT *client, const uint8_t *data, size_t size
+) {
+    const char *str = (const char *) data;
+    auto result = client_parse_incoming_terminal_esc_arrow_key(str, size);
+
+    if (result.key == TERMINAL_KEY_NONE) {
+        return false;
+    }
+
+    switch (result.key) {
+        case TERMINAL_KEY_UP: {
+            LOG("user pressed UP");
+            break;
+        }
+        case TERMINAL_KEY_DOWN: {
+            LOG("user pressed DOWN");
+            break;
+        }
+        case TERMINAL_KEY_LEFT: {
+            LOG("user pressed LEFT");
+            break;
+        }
+        case TERMINAL_KEY_RIGHT: {
+            LOG("user pressed RIGHT");
+            break;
+        }
+        default: break;
+    }
+
+    return true;
+}
+
 static size_t client_get_esc_blocking_length(
     const unsigned char *data, size_t size
 ) {
@@ -606,7 +688,11 @@ static size_t client_get_esc_blocking_length(
         return 0;
     }
 
-    return 1;
+    const char *str = (const char *) data;
+    auto result = client_parse_incoming_terminal_esc_arrow_key(str, size);
+    const char *next = result.end;
+
+    return next == str ? 1 : SIZEVAL(next - str);
 }
 
 static size_t client_get_esc_nonblocking_length(
