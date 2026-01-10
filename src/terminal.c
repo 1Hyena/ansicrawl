@@ -476,6 +476,47 @@ static void terminal_handle_incoming_client_iac(
 
             break;
         }
+        case TELNET_OPT_BINARY: {
+            switch (data[1]) {
+                case TELNET_WILL:
+                case TELNET_WONT:
+                case TELNET_DO:
+                case TELNET_DONT: {
+                    {
+                        auto response = telnet_opt_handle_local(
+                            &terminal->telopt.client.bin, data[1], data[2]
+                        );
+
+                        if (response.size) {
+                            terminal_write_to_client(
+                                terminal, (const char *) response.data,
+                                response.size
+                            );
+                        }
+                    }
+
+                    {
+                        auto response = telnet_opt_handle_remote(
+                            &terminal->telopt.client.bin, data[1], data[2]
+                        );
+
+                        if (response.size) {
+                            terminal_write_to_client(
+                                terminal, (const char *) response.data,
+                                response.size
+                            );
+                        }
+                    }
+
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+
+            break;
+        }
         default: {
             switch (data[1]) {
                 case TELNET_DO: {

@@ -104,6 +104,7 @@ struct TERMINAL {
             struct telnet_opt_type naws;
             struct telnet_opt_type echo;
             struct telnet_opt_type sga;
+            struct telnet_opt_type bin;
 
             struct {
                 struct {
