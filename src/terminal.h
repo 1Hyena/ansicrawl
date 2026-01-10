@@ -12,7 +12,10 @@
 typedef enum : uint8_t {
     TERMINAL_KEY_NONE = 0,
     ///////////////////////////////////////////////////////////////////////////
-    TERMINAL_KEY_UP, TERMINAL_KEY_DOWN, TERMINAL_KEY_LEFT, TERMINAL_KEY_RIGHT
+    TERMINAL_KEY_UP,        TERMINAL_KEY_DOWN,      TERMINAL_KEY_LEFT,
+    TERMINAL_KEY_RIGHT,     TERMINAL_KEY_HOME,      TERMINAL_KEY_END,
+    TERMINAL_KEY_PGUP,      TERMINAL_KEY_PGDN,      TERMINAL_KEY_NOP,
+    TERMINAL_KEY_INS,       TERMINAL_KEY_DEL
 } TERMINAL_KEY;
 
 typedef enum : uint8_t {
