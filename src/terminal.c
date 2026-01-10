@@ -10,14 +10,6 @@
 #include <stdio.h>
 ////////////////////////////////////////////////////////////////////////////////
 
-#define CTRL_KEY(k) ((k) & 0x1f)
-
-enum editorKey {
-    ARROW_LEFT = 1000,
-    ARROW_RIGHT,
-    ARROW_UP,
-    ARROW_DOWN
-};
 
 static void terminal_die(TERMINAL *terminal);
 static void terminal_enable_raw_mode(TERMINAL *terminal);
@@ -230,158 +222,7 @@ static bool terminal_task_init_editor(TERMINAL *terminal) {
     return true;
 }
 
-/*
-static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
-    bool success = true;
-    int y;
-
-    for (y = 0; y < terminal->screen.height; y++) {
-        if (y == terminal->screen.height / 3) {
-            char welcome[80];
-            int welcomelen = snprintf(
-                welcome, sizeof(welcome),
-                "ANSI Crawl -- update %lu", global.count.update
-            );
-
-            if (welcomelen > terminal->screen.width) {
-                welcomelen = terminal->screen.width;
-            }
-
-            int padding = (terminal->screen.width - welcomelen) / 2;
-
-            if (padding) {
-                success &= clip_append_char_array(clip, "~", 1);
-                padding--;
-            }
-
-            while (padding--) {
-                success &= clip_append_char_array(clip, " ", 1);
-            }
-
-            success &= clip_append_char_array(
-                clip, welcome, SIZEVAL(welcomelen)
-            );
-        } else {
-            success &= clip_append_char_array(clip, "~", 1);
-        }
-
-        success &= clip_append_char_array(clip, "\x1b[K", 3);
-
-        if (y < terminal->screen.height - 1) {
-            success &= clip_append_char_array(clip, "\r\n", 2);
-        }
-    }
-
-    if (!success) {
-        FUSE();
-        terminal_die(terminal);
-    }
-}
-
-static int terminal_read_key(TERMINAL *terminal) {
-    CLIP *clip = terminal->io.interface.incoming.clip;
-
-    if (clip_is_empty(clip)) {
-        FUSE();
-        terminal_die(terminal);
-        return CTRL_KEY('q');
-    }
-
-    char c = (char) clip_get_byte_at(clip, 0);
-
-    clip_destroy(clip_shift(clip, 1));
-
-    if (c == '\x1b') {
-        int key = '\x1b';
-
-        if (clip_get_size(clip) >= 2) {
-            const char *seq = (const char *) clip_get_byte_array(clip);
-
-            if (seq[0] == '[') {
-                switch (seq[1]) {
-                    case 'A': key = ARROW_UP; break;
-                    case 'B': key = ARROW_DOWN; break;
-                    case 'C': key = ARROW_RIGHT; break;
-                    case 'D': key = ARROW_LEFT; break;
-                    default: {
-                        break;
-                    }
-                }
-            }
-
-            clip_destroy(clip_shift(clip, 2));
-        }
-        else {
-            FUSE();
-            clip_clear(clip);
-        }
-
-        return key;
-    }
-    else {
-        return c;
-    }
-}
-
-static void terminal_move_cursor(TERMINAL *terminal, int key) {
-    switch (key) {
-        case ARROW_LEFT: {
-            if (terminal->screen.cx != 0) {
-                terminal->screen.cx--;
-            }
-
-            break;
-        }
-        case ARROW_RIGHT: {
-            if (terminal->screen.cx != terminal->screen.width - 1) {
-                terminal->screen.cx++;
-            }
-
-            break;
-        }
-        case ARROW_UP: {
-            if (terminal->screen.cy != 0) {
-                terminal->screen.cy--;
-            }
-
-            break;
-        }
-        case ARROW_DOWN: {
-            if (terminal->screen.cy != terminal->screen.height - 1) {
-                terminal->screen.cy++;
-            }
-
-            break;
-        }
-    }
-}
-
-static void terminal_process_keypress(TERMINAL *terminal) {
-    if (clip_is_empty(terminal->io.interface.incoming.clip)) {
-        return;
-    }
-
-    int c = terminal_read_key(terminal);
-
-    switch (c) {
-        case CTRL_KEY('q'): {
-            global.bitset.shutdown = true;
-            break;
-        }
-        case ARROW_UP:
-        case ARROW_DOWN:
-        case ARROW_LEFT:
-        case ARROW_RIGHT: {
-            terminal_move_cursor(terminal, c);
-            break;
-        }
-    }
-}
-*/
-
 static bool terminal_task_idle(TERMINAL *terminal) {
-    //terminal_process_keypress(terminal);
-
     if (terminal->bitset.reformat) {
         terminal->state = TERMINAL_ASK_SCREEN_SIZE;
 
@@ -417,7 +258,7 @@ static void terminal_update_state(TERMINAL *terminal) {
                 break;
             }
             case TERMINAL_GET_SCREEN_SIZE: {
-                repeat = false; //terminal_task_get_screen_size(terminal);
+                repeat = false;
                 break;
             }
             case TERMINAL_INIT_EDITOR: {

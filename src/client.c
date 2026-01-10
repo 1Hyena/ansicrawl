@@ -22,6 +22,9 @@ static void client_handle_incoming_terminal_esc(
 static void client_handle_incoming_terminal_txt(
     CLIENT *, const uint8_t *data, size_t sz
 );
+static bool client_handle_incoming_terminal_txt_ctrl_key(
+    CLIENT *, const uint8_t *data, size_t sz
+);
 static size_t client_get_esc_blocking_length(
     const unsigned char *data, size_t size
 );
@@ -137,6 +140,14 @@ static void client_handle_incoming_terminal_txt(
         }
 
         LOG("terminal:txt -> client: %s", stackbuf);
+    }
+
+    bool handled = client_handle_incoming_terminal_txt_ctrl_key(
+        client, data, size
+    );
+
+    if (handled) {
+        return;
     }
 }
 
@@ -621,4 +632,25 @@ static const char *client_get_esc_sequence_code(
     const char *code = telnet_uchar_to_printable(data[index]);
 
     return code ? code : telnet_uchar_to_string(data[index]);
+}
+
+static bool client_handle_incoming_terminal_txt_ctrl_key(
+    CLIENT *client, const uint8_t *data, size_t size
+) {
+    if (!size) {
+        return false;
+    }
+
+    switch (data[0]) {
+        case TERMINAL_CTRL_C:
+        case TERMINAL_CTRL_D:
+        case TERMINAL_CTRL_Q: {
+            LOG("user terminates the session");
+            global.bitset.shutdown = true;
+            break;
+        }
+        default: return false;
+    }
+
+    return true;
 }

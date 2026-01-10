@@ -144,10 +144,6 @@ static bool main_fetch_incoming() {
         }
     }
 
-    if (count >= 0) {
-        LOG("%lu read", (size_t) count);
-    }
-
     return count > 0 || global.terminal;
 }
 
@@ -207,10 +203,6 @@ static bool main_flush_outgoing() {
         clip_clear(clip);
     }
 
-    if (written >= 0) {
-        LOG("%lu written", (size_t) written);
-    }
-
     main_flush_logbuf();
 
     return written > 0;
@@ -243,7 +235,7 @@ static bool main_update() {
         }
     }
 
-    if (global.bitset.broken || global.count.update > 10000) {
+    if (global.bitset.broken) {
         global.bitset.shutdown = true;
     }
 

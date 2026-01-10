@@ -10,6 +10,12 @@
 
 
 typedef enum : uint8_t {
+    TERMINAL_CTRL_Q = ('q' & 0x1f),
+    TERMINAL_CTRL_C = ('c' & 0x1f),
+    TERMINAL_CTRL_D = ('d' & 0x1f)
+} TERMINAL_CTRL_KEY;
+
+typedef enum : uint8_t {
     TERMINAL_ESC = 27   // ANSI escape character
 } TERMINAL_CODE;
 
