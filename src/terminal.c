@@ -10,7 +10,6 @@
 #include <stdio.h>
 ////////////////////////////////////////////////////////////////////////////////
 
-
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
@@ -19,6 +18,23 @@ enum editorKey {
     ARROW_UP,
     ARROW_DOWN
 };
+
+static void terminal_die(TERMINAL *terminal);
+static void terminal_enable_raw_mode(TERMINAL *terminal);
+static void terminal_disable_raw_mode(TERMINAL *terminal);
+static void terminal_update_interface(TERMINAL *terminal);
+static void terminal_update_client(TERMINAL *terminal);
+static void terminal_update_state(TERMINAL *terminal);
+static bool terminal_read_from_client(TERMINAL *);
+static bool terminal_read_from_interface(TERMINAL *);
+static bool terminal_write_to_interface(TERMINAL *, const char *, size_t len);
+static bool terminal_write_to_client(TERMINAL *, const char *, size_t len);
+static bool terminal_flush_outgoing(TERMINAL *);
+static bool terminal_fetch_incoming(TERMINAL *);
+static void terminal_shutdown(TERMINAL *);
+static void terminal_handle_incoming_client_iac(
+    TERMINAL *, const uint8_t *data, size_t sz
+);
 
 TERMINAL *terminal_create() {
     TERMINAL *terminal = mem_new_terminal();
@@ -50,6 +66,53 @@ void terminal_destroy(TERMINAL *terminal) {
     clip_destroy(terminal->io.client.outgoing.clip);
 
     mem_free_terminal(terminal);
+}
+
+void terminal_init(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
+    terminal_enable_raw_mode(terminal);
+
+    if (terminal->bitset.broken) {
+        return;
+    }
+
+    terminal->state = TERMINAL_INIT_EDITOR;
+}
+
+void terminal_deinit(TERMINAL *terminal) {
+    if (!terminal) {
+        return;
+    }
+
+    terminal_disable_raw_mode(terminal);
+
+    terminal->state = TERMINAL_STATE_NONE;
+}
+
+bool terminal_update(TERMINAL *terminal) {
+    if (!terminal) {
+        return false;
+    }
+
+    if (terminal->bitset.broken) {
+        global.bitset.shutdown = true;
+        return false;
+    }
+
+    if (global.bitset.shutdown) {
+        terminal_shutdown(terminal);
+    }
+
+    bool fetched = terminal_fetch_incoming(terminal);
+
+    terminal_update_interface(terminal);
+    terminal_update_state(terminal);
+    terminal_update_client(terminal);
+
+    return terminal_flush_outgoing(terminal) || fetched;
 }
 
 static void terminal_die(TERMINAL *terminal) {
@@ -136,7 +199,6 @@ static bool terminal_task_get_screen_size(TERMINAL *terminal) {
 
     terminal->screen.width = cols;
     terminal->screen.height = rows;
-    terminal->bitset.redraw = true;
     terminal->bitset.reformat = false;
 
     terminal->state = TERMINAL_IDLE;
@@ -162,7 +224,6 @@ static bool terminal_task_ask_screen_size(TERMINAL *terminal) {
 
     terminal->screen.width = ws.ws_col;
     terminal->screen.height = ws.ws_row;
-    terminal->bitset.redraw = true;
     terminal->bitset.reformat = false;
 
     terminal->state = TERMINAL_IDLE;
@@ -224,44 +285,6 @@ static void terminal_draw_rows(TERMINAL *terminal, CLIP *clip) {
         terminal_die(terminal);
     }
 }*/
-
-static void terminal_redraw_screen(TERMINAL *terminal) {
-    /*
-    bool success = true;
-    CLIP *clip = clip_create_char_array();
-
-    success &= clip_append_char_array(clip, "\x1b[?25l", 6);
-    success &= clip_append_char_array(clip, "\x1b[H", 3);
-
-    terminal_draw_rows(terminal, clip);
-
-    char buf[32];
-
-    snprintf(
-        buf, sizeof(buf), "\x1b[%d;%dH",
-        terminal->screen.cy + 1, terminal->screen.cx + 1
-    );
-
-    success &= clip_append_char_array(clip, buf, strlen(buf));
-    success &= clip_append_char_array(clip, "\x1b[?25h", 6);
-
-    if (terminal->bitset.broken == false) {
-        if (success) {
-            terminal_write_to_interface(
-                terminal, clip_get_char_array(clip), clip_get_size(clip)
-            );
-        }
-        else {
-            FUSE();
-            terminal_die(terminal);
-        }
-    }
-
-    clip_destroy(clip);
-    */
-
-    terminal->bitset.redraw = false;
-}
 
 static int terminal_read_key(TERMINAL *terminal) {
     CLIP *clip = terminal->io.interface.incoming.clip;
@@ -361,16 +384,10 @@ static void terminal_process_keypress(TERMINAL *terminal) {
             break;
         }
     }
-
-    terminal->bitset.redraw = true;
 }
 
 static bool terminal_task_idle(TERMINAL *terminal) {
     terminal_process_keypress(terminal);
-
-    if (terminal->bitset.redraw) {
-        terminal_redraw_screen(terminal);
-    }
 
     if (terminal->bitset.reformat) {
         terminal->state = TERMINAL_ASK_SCREEN_SIZE;
@@ -381,31 +398,7 @@ static bool terminal_task_idle(TERMINAL *terminal) {
     return false;
 }
 
-void terminal_init(TERMINAL *terminal) {
-    if (!terminal) {
-        return;
-    }
-
-    terminal_enable_raw_mode(terminal);
-
-    if (terminal->bitset.broken) {
-        return;
-    }
-
-    terminal->state = TERMINAL_INIT_EDITOR;
-}
-
-void terminal_deinit(TERMINAL *terminal) {
-    if (!terminal) {
-        return;
-    }
-
-    terminal_disable_raw_mode(terminal);
-
-    terminal->state = TERMINAL_STATE_NONE;
-}
-
-void terminal_shutdown(TERMINAL *terminal) {
+static void terminal_shutdown(TERMINAL *terminal) {
     if (!terminal || terminal->bitset.shutdown) {
         return;
     }
@@ -446,6 +439,10 @@ static void terminal_update_state(TERMINAL *terminal) {
     }
 }
 
+static void terminal_update_interface(TERMINAL *terminal) {
+    while (terminal_read_from_interface(terminal));
+}
+
 static void terminal_update_client(TERMINAL *terminal) {
     if (terminal->screen.width
     ||  terminal->screen.height
@@ -478,29 +475,7 @@ static void terminal_update_client(TERMINAL *terminal) {
     }
 }
 
-bool terminal_update(TERMINAL *terminal) {
-    if (!terminal) {
-        return false;
-    }
-
-    if (terminal->bitset.broken) {
-        global.bitset.shutdown = true;
-        return false;
-    }
-
-    if (global.bitset.shutdown) {
-        terminal_shutdown(terminal);
-    }
-
-    bool fetched = terminal_fetch_incoming(terminal);
-
-    terminal_update_state(terminal);
-    terminal_update_client(terminal);
-
-    return terminal_flush_outgoing(terminal) || fetched;
-}
-
-void terminal_handle_incoming_client_iac(
+static void terminal_handle_incoming_client_iac(
     TERMINAL *terminal, const uint8_t *data, size_t size
 ) {
     if (!data || size < 2 || data[0] != TELNET_IAC) {
@@ -534,7 +509,11 @@ void terminal_handle_incoming_client_iac(
     }
 }
 
-bool terminal_read_from_client(TERMINAL *terminal) {
+static bool terminal_read_from_interface(TERMINAL *terminal) {
+    return false;
+}
+
+static bool terminal_read_from_client(TERMINAL *terminal) {
     CLIP *clip = terminal->io.client.incoming.clip;
 
     if (clip_is_empty(clip)) {
@@ -579,7 +558,7 @@ bool terminal_read_from_client(TERMINAL *terminal) {
     return false;
 }
 
-bool terminal_write_to_interface(
+static bool terminal_write_to_interface(
     TERMINAL *terminal, const char *str, size_t len
 ) {
     return clip_append_byte_array(
@@ -588,7 +567,7 @@ bool terminal_write_to_interface(
     );
 }
 
-bool terminal_write_to_client(
+static bool terminal_write_to_client(
     TERMINAL *terminal, const char *str, size_t len
 ) {
     if (terminal->bitset.shutdown) {
@@ -601,7 +580,7 @@ bool terminal_write_to_client(
     );
 }
 
-bool terminal_fetch_incoming(TERMINAL *terminal) {
+static bool terminal_fetch_incoming(TERMINAL *terminal) {
     if (!terminal) {
         return false;
     }
@@ -647,7 +626,7 @@ bool terminal_fetch_incoming(TERMINAL *terminal) {
     return fetched;
 }
 
-bool terminal_flush_outgoing(TERMINAL *terminal) {
+static bool terminal_flush_outgoing(TERMINAL *terminal) {
     if (!terminal) {
         return false;
     }

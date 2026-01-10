@@ -6,6 +6,17 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+static bool client_read_from_terminal(CLIENT *client);
+static bool client_write_to_terminal(CLIENT *, const char *str, size_t len);
+static bool client_flush_outgoing(CLIENT *);
+static bool client_fetch_incoming(CLIENT *);
+static void client_update_terminal(CLIENT *client);
+static void client_update_screen(CLIENT *client);
+static void client_shutdown(CLIENT *);
+static void client_handle_incoming_terminal_iac(
+    CLIENT *, const uint8_t *data, size_t sz
+);
+
 CLIENT *client_create() {
     CLIENT *client = mem_new_client();
 
@@ -42,7 +53,24 @@ void client_init(CLIENT *client) {
 void client_deinit(CLIENT *client) {
 }
 
-void client_shutdown(CLIENT *client) {
+bool client_update(CLIENT *client) {
+    if (!client || client->bitset.shutdown) {
+        return false;
+    }
+
+    if (global.bitset.shutdown) {
+        client_shutdown(client);
+    }
+
+    bool fetched = client_fetch_incoming(client);
+
+    client_update_terminal(client);
+    client_update_screen(client);
+
+    return client_flush_outgoing(client) || fetched;
+}
+
+static void client_shutdown(CLIENT *client) {
     if (!client || client->bitset.shutdown) {
         return;
     }
@@ -51,7 +79,7 @@ void client_shutdown(CLIENT *client) {
     client->bitset.shutdown = true;
 }
 
-void client_handle_incoming_terminal_iac(
+static void client_handle_incoming_terminal_iac(
     CLIENT *client, const uint8_t *data, size_t size
 ) {
     if (!data || size < 2 || data[0] != TELNET_IAC) {
@@ -207,32 +235,15 @@ static void client_update_terminal(CLIENT *client) {
         return;
     }
 
+    while (client_read_from_terminal(client));
+
     if (!client->telopt.terminal.naws.sent_do) {
         client_write_to_terminal(client, TELNET_IAC_DO_NAWS, 0);
         client->telopt.terminal.naws.sent_do = true;
     }
 }
 
-bool client_update(CLIENT *client) {
-    if (!client || client->bitset.shutdown) {
-        return false;
-    }
-
-    if (global.bitset.shutdown) {
-        client_shutdown(client);
-    }
-
-    bool fetched = client_fetch_incoming(client);
-
-    while (client_read_from_terminal(client));
-
-    client_update_terminal(client);
-    client_update_screen(client);
-
-    return client_flush_outgoing(client) || fetched;
-}
-
-bool client_read_from_terminal(CLIENT *client) {
+static bool client_read_from_terminal(CLIENT *client) {
     CLIP *clip = client->io.terminal.incoming.clip;
 
     if (clip_is_empty(clip)) {
@@ -268,7 +279,9 @@ bool client_read_from_terminal(CLIENT *client) {
     return false;
 }
 
-bool client_write_to_terminal(CLIENT *client, const char *str, size_t len) {
+static bool client_write_to_terminal(
+    CLIENT *client, const char *str, size_t len
+) {
     client->io.terminal.outgoing.total += len;
 
     return clip_append_byte_array(
@@ -277,7 +290,7 @@ bool client_write_to_terminal(CLIENT *client, const char *str, size_t len) {
     );
 }
 
-bool client_fetch_incoming(CLIENT *client) {
+static bool client_fetch_incoming(CLIENT *client) {
     if (!client) {
         return false;
     }
@@ -305,7 +318,7 @@ bool client_fetch_incoming(CLIENT *client) {
     return false;
 }
 
-bool client_flush_outgoing(CLIENT *client) {
+static bool client_flush_outgoing(CLIENT *client) {
     if (!client) {
         return false;
     }
