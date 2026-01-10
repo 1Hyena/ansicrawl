@@ -65,6 +65,8 @@ void client_destroy(CLIENT *client) {
 void client_init(CLIENT *client) {
     client->telopt.terminal.naws.remote.wanted = true;
     client->telopt.terminal.echo.local.wanted = true;
+    client->telopt.terminal.sga.local.wanted = true;
+    client->telopt.terminal.sga.remote.wanted = true;
 }
 
 void client_deinit(CLIENT *client) {
@@ -284,6 +286,47 @@ static void client_handle_incoming_terminal_iac(
 
             break;
         }
+        case TELNET_OPT_SGA: {
+            switch (data[1]) {
+                case TELNET_WILL:
+                case TELNET_WONT:
+                case TELNET_DO:
+                case TELNET_DONT: {
+                    {
+                        auto response = telnet_opt_handle_local(
+                            &client->telopt.terminal.sga, data[1], data[2]
+                        );
+
+                        if (response.size) {
+                            client_write_to_terminal(
+                                client, (const char *) response.data,
+                                response.size
+                            );
+                        }
+                    }
+
+                    {
+                        auto response = telnet_opt_handle_remote(
+                            &client->telopt.terminal.sga, data[1], data[2]
+                        );
+
+                        if (response.size) {
+                            client_write_to_terminal(
+                                client, (const char *) response.data,
+                                response.size
+                            );
+                        }
+                    }
+
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+
+            break;
+        }
         default: {
             switch (data[1]) {
                 case TELNET_DO: {
@@ -389,6 +432,18 @@ static void client_update_terminal(CLIENT *client) {
     && !telnet_opt_local_is_pending(client->telopt.terminal.echo)) {
         client_write_to_terminal(client, TELNET_IAC_WILL_ECHO, 0);
         client->telopt.terminal.echo.local.sent_will = true;
+    }
+
+    if (client->telopt.terminal.sga.local.wanted
+    && !telnet_opt_local_is_pending(client->telopt.terminal.sga)) {
+        client_write_to_terminal(client, TELNET_IAC_WILL_SGA, 0);
+        client->telopt.terminal.sga.local.sent_will = true;
+    }
+
+    if (client->telopt.terminal.sga.remote.wanted
+    && !telnet_opt_remote_is_pending(client->telopt.terminal.sga)) {
+        client_write_to_terminal(client, TELNET_IAC_DO_SGA, 0);
+        client->telopt.terminal.sga.remote.sent_do = true;
     }
 }
 

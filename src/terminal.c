@@ -104,6 +104,8 @@ void terminal_init(TERMINAL *terminal) {
     }
 
     terminal->telopt.client.naws.local.wanted = true;
+    terminal->telopt.client.sga.local.wanted = true;
+    terminal->telopt.client.sga.remote.wanted = true;
 
     terminal->state = TERMINAL_INIT_EDITOR;
 }
@@ -468,6 +470,18 @@ static void terminal_update_client(TERMINAL *terminal) {
             terminal->telopt.client.naws.local.sent_will = true;
         }
     }
+
+    if (terminal->telopt.client.sga.local.wanted
+    && !telnet_opt_local_is_pending(terminal->telopt.client.sga)) {
+        terminal_write_to_client(terminal, TELNET_IAC_WILL_SGA, 0);
+        terminal->telopt.client.sga.local.sent_will = true;
+    }
+
+    if (terminal->telopt.client.sga.remote.wanted
+    && !telnet_opt_remote_is_pending(terminal->telopt.client.sga)) {
+        terminal_write_to_client(terminal, TELNET_IAC_DO_SGA, 0);
+        terminal->telopt.client.sga.remote.sent_do = true;
+    }
 }
 
 static void terminal_handle_incoming_client_iac(
@@ -569,6 +583,47 @@ static void terminal_handle_incoming_client_iac(
                             terminal, (const char *) response.data,
                             response.size
                         );
+                    }
+
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+
+            break;
+        }
+        case TELNET_OPT_SGA: {
+            switch (data[1]) {
+                case TELNET_WILL:
+                case TELNET_WONT:
+                case TELNET_DO:
+                case TELNET_DONT: {
+                    {
+                        auto response = telnet_opt_handle_local(
+                            &terminal->telopt.client.sga, data[1], data[2]
+                        );
+
+                        if (response.size) {
+                            terminal_write_to_client(
+                                terminal, (const char *) response.data,
+                                response.size
+                            );
+                        }
+                    }
+
+                    {
+                        auto response = telnet_opt_handle_remote(
+                            &terminal->telopt.client.sga, data[1], data[2]
+                        );
+
+                        if (response.size) {
+                            terminal_write_to_client(
+                                terminal, (const char *) response.data,
+                                response.size
+                            );
+                        }
                     }
 
                     break;

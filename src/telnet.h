@@ -113,6 +113,14 @@ static const char TELNET_IAC_WILL_ECHO[] = {
     (char) TELNET_IAC, (char) TELNET_WILL, (char) TELNET_OPT_ECHO, 0
 };
 
+static const char TELNET_IAC_WILL_SGA[] = {
+    (char) TELNET_IAC, (char) TELNET_WILL, (char) TELNET_OPT_SGA, 0
+};
+
+static const char TELNET_IAC_DO_SGA[] = {
+    (char) TELNET_IAC, (char) TELNET_DO, (char) TELNET_OPT_SGA, 0
+};
+
 static const char TELNET_IAC_WONT_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_WONT, (char) TELNET_OPT_NAWS, 0
 };
@@ -157,15 +165,6 @@ static inline struct telnet_opt_local_response_type {
     struct telnet_opt_local_response_type response = {};
 
     switch (cmd) {
-        case TELNET_WILL:
-        case TELNET_WONT: {
-            response = (struct telnet_opt_local_response_type) {
-                .data = { TELNET_IAC, TELNET_DONT, arg },
-                .size = 3
-            };
-
-            break;
-        }
         case TELNET_DO: {
             if (opt->local.enabled) {
                 break;
@@ -215,15 +214,6 @@ static inline struct telnet_opt_remote_response_type {
     struct telnet_opt_remote_response_type response = {};
 
     switch (cmd) {
-        case TELNET_DO:
-        case TELNET_DONT: {
-            response = (struct telnet_opt_remote_response_type) {
-                .data = { TELNET_IAC, TELNET_WONT, arg },
-                .size = 3
-            };
-
-            break;
-        }
         case TELNET_WILL: {
             if (opt->remote.enabled) {
                 break;
