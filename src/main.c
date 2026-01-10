@@ -243,7 +243,7 @@ static bool main_update() {
         }
     }
 
-    if (global.bitset.broken || global.count.update > 10) {
+    if (global.bitset.broken || global.count.update > 10000) {
         global.bitset.shutdown = true;
     }
 
