@@ -6,6 +6,48 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+bool telnet_opt_local_is_pending(struct telnet_opt_type opt) {
+    return (
+        opt.local.sent_will ||
+        opt.local.sent_wont ||
+        opt.local.recv_do   ||
+        opt.local.recv_dont
+    );
+}
+
+bool telnet_opt_remote_is_pending(struct telnet_opt_type opt) {
+    return (
+        opt.remote.sent_do   ||
+        opt.remote.sent_dont ||
+        opt.remote.recv_will ||
+        opt.remote.recv_wont
+    );
+}
+
+void telnet_opt_local_enable(struct telnet_opt_type *opt) {
+    static struct telnet_opt_type zero;
+    opt->local = zero.local;
+    opt->local.enabled = true;
+}
+
+void telnet_opt_local_disable(struct telnet_opt_type *opt) {
+    static struct telnet_opt_type zero;
+    opt->local = zero.local;
+    opt->local.enabled = false;
+}
+
+void telnet_opt_remote_enable(struct telnet_opt_type *opt) {
+    static struct telnet_opt_type zero;
+    opt->remote = zero.remote;
+    opt->remote.enabled = true;
+}
+
+void telnet_opt_remote_disable(struct telnet_opt_type *opt) {
+    static struct telnet_opt_type zero;
+    opt->remote = zero.remote;
+    opt->remote.enabled = false;
+}
+
 const char *telnet_get_iac_sequence_code(
     const unsigned char *data, size_t size, size_t index
 ) {

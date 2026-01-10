@@ -3,6 +3,7 @@
 #define CLIENT_H_06_01_2026
 ////////////////////////////////////////////////////////////////////////////////
 #include "global.h"
+#include "telnet.h"
 ////////////////////////////////////////////////////////////////////////////////
 #include <stdint.h>
 ////////////////////////////////////////////////////////////////////////////////
@@ -31,12 +32,8 @@ struct CLIENT {
 
     struct {
         struct {
-            struct {
-                bool sent_do:1;
-                bool sent_dont:1;
-                bool recv_will:1;
-                bool recv_wont:1;
-            } naws;
+            struct telnet_opt_type naws;
+            struct telnet_opt_type echo;
         } terminal;
     } telopt;
 

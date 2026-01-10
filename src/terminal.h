@@ -9,6 +9,22 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+typedef enum : uint8_t {
+    TERMINAL_ESC = 27   // ANSI escape character
+} TERMINAL_CODE;
+
+static const char TERMINAL_ESC_HIDE_CURSOR[] = {
+    (char) TERMINAL_ESC, '[', '?', '2', '5', 'l', '\0'
+};
+
+static const char TERMINAL_ESC_SHOW_CURSOR[] = {
+    (char) TERMINAL_ESC, '[', '?', '2', '5', 'h', '\0'
+};
+
+static const char TERMINAL_ESC_HOME_CURSOR[] = {
+    (char) TERMINAL_ESC, '[', 'H', '\0'
+};
+
 static constexpr size_t TERMINAL_DEFAULT_WIDTH          = 80;
 static constexpr size_t TERMINAL_DEFAULT_HEIGHT         = 24;
 static constexpr char   TERMINAL_ESC_HIDDEN[]           = "\033[8m";
@@ -62,23 +78,25 @@ struct TERMINAL {
     struct {
         int cx;
         int cy;
-        int width;
-        int height;
+        long width;
+        long height;
     } screen;
 
     TERMINAL_STATE state;
 
     struct {
         struct {
-            struct {
-                bool recv_do:1;
-                bool sent_will:1;
+            struct telnet_opt_type naws;
+            struct telnet_opt_type echo;
 
+            struct {
                 struct {
-                    uint16_t width;
-                    uint16_t height;
-                } state;
-            } naws;
+                    struct {
+                        uint16_t width;
+                        uint16_t height;
+                    } naws;
+                } local;
+            } state;
         } client;
     } telopt;
 

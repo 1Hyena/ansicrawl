@@ -1,7 +1,30 @@
 // SPDX-License-Identifier: MIT
 #ifndef TELNET_H_08_01_2026
 #define TELNET_H_08_01_2026
+///////////////////////////////////////////////////////////////////////////////
+#include <stdint.h>
+///////////////////////////////////////////////////////////////////////////////
 
+
+struct telnet_opt_type {
+    struct {
+        bool wanted:1;
+        bool enabled:1;
+        bool sent_will:1;
+        bool sent_wont:1;
+        bool recv_do:1;
+        bool recv_dont:1;
+    } local;
+
+    struct {
+        bool wanted:1;
+        bool enabled:1;
+        bool sent_do:1;
+        bool sent_dont:1;
+        bool recv_will:1;
+        bool recv_wont:1;
+    } remote;
+};
 
 typedef enum : uint8_t {
     TELNET_OPT_BINARY       = 0,   // 8-bit data path
@@ -38,7 +61,6 @@ typedef enum : uint8_t {
     TELNET_OPT_SNDLOC       = 23,  // send location
     TELNET_OPT_TTYPE        = 24,  // terminal type
     TELNET_OPT_EOR          = 25,  // end or record
-    TELNET_ANSI_ESC         = 27,  // ANSI escape character
     TELNET_OPT_NAWS         = 31,  // negotiate about window size
     TELNET_OPT_TS           = 32,  // terminal speed
     TELNET_OPT_EOPT         = 36,  // environment option
@@ -67,24 +89,40 @@ typedef enum : uint8_t {
     TELNET_IAC              = 255
 } TELNET_CODE;
 
-static const char TELNET_ANSI_HIDE_CURSOR[] = {
-    (char) TELNET_ANSI_ESC, '[', '?', '2', '5', 'l', '\0'
+static const char TELNET_IAC_WILL[] = {
+    (char) TELNET_IAC, (char) TELNET_WILL, 0
 };
 
-static const char TELNET_ANSI_SHOW_CURSOR[] = {
-    (char) TELNET_ANSI_ESC, '[', '?', '2', '5', 'h', '\0'
+static const char TELNET_IAC_WONT[] = {
+    (char) TELNET_IAC, (char) TELNET_WONT, 0
 };
 
-static const char TELNET_ANSI_HOME_CURSOR[] = {
-    (char) TELNET_ANSI_ESC, '[', 'H', '\0'
+static const char TELNET_IAC_DO[] = {
+    (char) TELNET_IAC, (char) TELNET_DO, 0
+};
+
+static const char TELNET_IAC_DONT[] = {
+    (char) TELNET_IAC, (char) TELNET_DONT, 0
 };
 
 static const char TELNET_IAC_WILL_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_WILL, (char) TELNET_OPT_NAWS, 0
 };
 
+static const char TELNET_IAC_WILL_ECHO[] = {
+    (char) TELNET_IAC, (char) TELNET_WILL, (char) TELNET_OPT_ECHO, 0
+};
+
 static const char TELNET_IAC_WONT_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_WONT, (char) TELNET_OPT_NAWS, 0
+};
+
+static const char TELNET_IAC_WONT_ECHO[] = {
+    (char) TELNET_IAC, (char) TELNET_WONT, (char) TELNET_OPT_ECHO, 0
+};
+
+static const char TELNET_IAC_DONT_ECHO[] = {
+    (char) TELNET_IAC, (char) TELNET_DONT, (char) TELNET_OPT_ECHO, 0
 };
 
 static const char TELNET_IAC_DO_NAWS[] = {
@@ -102,6 +140,129 @@ static const char TELNET_IAC_SB_NAWS[] = {
 static const char TELNET_IAC_SE[] = {
     (char) TELNET_IAC, (char) TELNET_SE, 0
 };
+
+bool telnet_opt_local_is_pending(struct telnet_opt_type);
+void telnet_opt_local_enable(struct telnet_opt_type *);
+void telnet_opt_local_disable(struct telnet_opt_type *);
+bool telnet_opt_remote_is_pending(struct telnet_opt_type);
+void telnet_opt_remote_enable(struct telnet_opt_type *);
+void telnet_opt_remote_disable(struct telnet_opt_type *);
+
+static inline struct telnet_opt_local_response_type {
+    uint8_t data[3];
+    uint8_t size;
+} telnet_opt_handle_local(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg
+) {
+    struct telnet_opt_local_response_type response = {};
+
+    switch (cmd) {
+        case TELNET_WILL:
+        case TELNET_WONT: {
+            response = (struct telnet_opt_local_response_type) {
+                .data = { TELNET_IAC, TELNET_DONT, arg },
+                .size = 3
+            };
+
+            break;
+        }
+        case TELNET_DO: {
+            if (opt->local.enabled) {
+                break;
+            }
+
+            if (!opt->local.sent_will) {
+                response = (struct telnet_opt_local_response_type) {
+                    .data = { TELNET_IAC, TELNET_WILL, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_local_enable(opt);
+
+            break;
+        }
+        case TELNET_DONT: {
+            if (!opt->local.enabled) {
+                break;
+            }
+
+            if (!opt->local.sent_wont) {
+                response = (struct telnet_opt_local_response_type) {
+                    .data = { TELNET_IAC, TELNET_WONT, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_local_disable(opt);
+
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    return response;
+}
+
+static inline struct telnet_opt_remote_response_type {
+    uint8_t data[3];
+    uint8_t size;
+} telnet_opt_handle_remote(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg
+) {
+    struct telnet_opt_remote_response_type response = {};
+
+    switch (cmd) {
+        case TELNET_DO:
+        case TELNET_DONT: {
+            response = (struct telnet_opt_remote_response_type) {
+                .data = { TELNET_IAC, TELNET_WONT, arg },
+                .size = 3
+            };
+
+            break;
+        }
+        case TELNET_WILL: {
+            if (opt->remote.enabled) {
+                break;
+            }
+
+            if (!opt->remote.sent_do) {
+                response = (struct telnet_opt_remote_response_type) {
+                    .data = { TELNET_IAC, TELNET_DO, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_remote_enable(opt);
+
+            break;
+        }
+        case TELNET_WONT: {
+            if (!opt->remote.enabled) {
+                break;
+            }
+
+            if (!opt->remote.sent_dont) {
+                response = (struct telnet_opt_remote_response_type) {
+                    .data = { TELNET_IAC, TELNET_DONT, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_remote_disable(opt);
+
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    return response;
+}
 
 const char *telnet_uchar_to_printable(unsigned char c);
 const char *telnet_uchar_to_string(unsigned char c);
