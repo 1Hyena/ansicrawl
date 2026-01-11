@@ -82,11 +82,9 @@ void client_init(CLIENT *client) {
     client->telopt.terminal.bin.local.wanted = true;
     client->telopt.terminal.bin.remote.wanted = true;
 
-    client_write_to_terminal(client, "\x1b" "7", 0);
-    client_write_to_terminal(client, "\x1b[?47h", 0);
-
-    client_write_to_terminal(client, "\x1b[?7l", 0); // wrapping off
-
+    client_write_to_terminal(client, TERMINAL_ESC_SAVE_CURSOR, 0);
+    client_write_to_terminal(client, TERMINAL_ESC_SAVE_SCREEN, 0);
+    client_write_to_terminal(client, TERMINAL_ESC_LINE_WRAPPING_OFF, 0);
     client_write_to_terminal(client, TERMINAL_ESC_HIDE_CURSOR, 0);
     client_write_to_terminal(client, TERMINAL_ESC_HOME_CURSOR, 0);
 }
@@ -115,10 +113,9 @@ static void client_shutdown(CLIENT *client) {
         return;
     }
 
-    client_write_to_terminal(client, "\x1b[?7h", 0); // wrapping on
-
-    client_write_to_terminal(client, "\x1b[?47l", 0);
-    client_write_to_terminal(client, "\x1b" "8", 0);
+    client_write_to_terminal(client, TERMINAL_ESC_LINE_WRAPPING_ON, 0);
+    client_write_to_terminal(client, TERMINAL_ESC_RESTORE_SCREEN, 0);
+    client_write_to_terminal(client, TERMINAL_ESC_RESTORE_CURSOR, 0);
     client_write_to_terminal(client, TERMINAL_ESC_SHOW_CURSOR, 0);
 
     client->bitset.shutdown = true;

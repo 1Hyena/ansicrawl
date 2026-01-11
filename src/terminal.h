@@ -30,6 +30,15 @@ typedef enum : uint8_t {
 
 static constexpr size_t TERMINAL_DEFAULT_WIDTH          = 80;
 static constexpr size_t TERMINAL_DEFAULT_HEIGHT         = 24;
+static constexpr char   TERMINAL_ESC_LINE_WRAPPING_ON[] = "\x1b[?7h";
+static constexpr char   TERMINAL_ESC_LINE_WRAPPING_OFF[]= "\x1b[?7l";
+static constexpr char   TERMINAL_ESC_SAVE_SCREEN[]      = "\x1b[?47h";
+static constexpr char   TERMINAL_ESC_RESTORE_SCREEN[]   = "\x1b[?47l";
+static constexpr char   TERMINAL_ESC_SAVE_CURSOR[]      = "\x1b" "7";
+static constexpr char   TERMINAL_ESC_RESTORE_CURSOR[]   = "\x1b" "8";
+static constexpr char   TERMINAL_ESC_REQUEST_CURSOR[]   = "\x1b[6n";
+static constexpr char   TERMINAL_ESC_CURSOR_MAX_DOWN[]  = "\x1b[9999B";
+static constexpr char   TERMINAL_ESC_CURSOR_MAX_RIGHT[] = "\x1b[9999C";
 static constexpr char   TERMINAL_ESC_HIDE_CURSOR[]      = "\x1b[?25l";
 static constexpr char   TERMINAL_ESC_SHOW_CURSOR[]      = "\x1b[?25h";
 static constexpr char   TERMINAL_ESC_HOME_CURSOR[]      = "\x1b[H";

@@ -184,12 +184,11 @@ static bool terminal_task_ask_screen_size(TERMINAL *terminal) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        if (!terminal_write_to_dispatcher(terminal, "\x1b[9999C\x1b[9999B", 0)
-        ||  !terminal_write_to_dispatcher(terminal, "\x1b[6n", 0)) {
-            BUG("failed to ask screen size");
-            terminal_die(terminal);
-            return false;
-        }
+        terminal_write_to_dispatcher(terminal, TERMINAL_ESC_SAVE_CURSOR, 0);
+        terminal_write_to_dispatcher(terminal, TERMINAL_ESC_CURSOR_MAX_DOWN, 0);
+        terminal_write_to_dispatcher(terminal, TERMINAL_ESC_CURSOR_MAX_RIGHT,0);
+        terminal_write_to_dispatcher(terminal, TERMINAL_ESC_REQUEST_CURSOR, 0);
+        terminal_write_to_dispatcher(terminal, TERMINAL_ESC_RESTORE_CURSOR, 0);
 
         terminal->state = TERMINAL_GET_SCREEN_SIZE;
 
