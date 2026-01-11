@@ -26,6 +26,11 @@ struct telnet_opt_type {
     } remote;
 };
 
+struct telnet_opt_handler_response_type {
+    uint8_t data[3];
+    uint8_t size;
+};
+
 typedef enum : uint8_t {
     TELNET_FLAG_LOCAL   = (1 << 0),
     TELNET_FLAG_REMOTE  = (1 << 1)
@@ -168,158 +173,9 @@ void telnet_opt_local_disable(struct telnet_opt_type *);
 bool telnet_opt_remote_is_pending(struct telnet_opt_type);
 void telnet_opt_remote_enable(struct telnet_opt_type *);
 void telnet_opt_remote_disable(struct telnet_opt_type *);
-
-static inline struct telnet_opt_local_response_type {
-    uint8_t data[3];
-    uint8_t size;
-} telnet_opt_handle_local(
-    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg
-) {
-    struct telnet_opt_local_response_type response = {};
-
-    if (!opt) return response;
-
-    switch (cmd) {
-        case TELNET_DO: {
-            if (opt->local.enabled) {
-                break;
-            }
-
-            if (!opt->local.sent_will) {
-                response = (struct telnet_opt_local_response_type) {
-                    .data = { TELNET_IAC, TELNET_WILL, arg },
-                    .size = 3
-                };
-            }
-
-            telnet_opt_local_enable(opt);
-
-            break;
-        }
-        case TELNET_DONT: {
-            if (!opt->local.enabled) {
-                break;
-            }
-
-            if (!opt->local.sent_wont) {
-                response = (struct telnet_opt_local_response_type) {
-                    .data = { TELNET_IAC, TELNET_WONT, arg },
-                    .size = 3
-                };
-            }
-
-            telnet_opt_local_disable(opt);
-
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-
-    return response;
-}
-
-static inline struct telnet_opt_remote_response_type {
-    uint8_t data[3];
-    uint8_t size;
-} telnet_opt_handle_remote(
-    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg
-) {
-    struct telnet_opt_remote_response_type response = {};
-
-    if (!opt) return response;
-
-    switch (cmd) {
-        case TELNET_WILL: {
-            if (opt->remote.enabled) {
-                break;
-            }
-
-            if (!opt->remote.sent_do) {
-                response = (struct telnet_opt_remote_response_type) {
-                    .data = { TELNET_IAC, TELNET_DO, arg },
-                    .size = 3
-                };
-            }
-
-            telnet_opt_remote_enable(opt);
-
-            break;
-        }
-        case TELNET_WONT: {
-            if (!opt->remote.enabled) {
-                break;
-            }
-
-            if (!opt->remote.sent_dont) {
-                response = (struct telnet_opt_remote_response_type) {
-                    .data = { TELNET_IAC, TELNET_DONT, arg },
-                    .size = 3
-                };
-            }
-
-            telnet_opt_remote_disable(opt);
-
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-
-    return response;
-}
-
-static inline struct telnet_opt_handler_response_type {
-    uint8_t data[7];
-    uint8_t size;
-} telnet_opt_handle(
-    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg,
-    TELNET_FLAG flags
-) {
-    struct telnet_opt_handler_response_type response = {};
-    struct telnet_opt_local_response_type local_response = {};
-    struct telnet_opt_remote_response_type remote_response = {};
-
-    switch (cmd) {
-        case TELNET_DO:
-        case TELNET_DONT:
-        case TELNET_WILL:
-        case TELNET_WONT: {
-            break;
-        }
-        default: return response;
-    }
-
-    if (flags & TELNET_FLAG_LOCAL) {
-        local_response = telnet_opt_handle_local(opt, cmd, arg);
-    }
-
-    if (flags & TELNET_FLAG_REMOTE) {
-        remote_response = telnet_opt_handle_remote(opt, cmd, arg);
-    }
-
-    for (size_t i=0; i<local_response.size; ++i) {
-        response.data[response.size++] = local_response.data[i];
-
-        if (response.size >= sizeof(response.data)) {
-            response.size = 0;
-            return response;
-        }
-    }
-
-    for (size_t i=0; i<remote_response.size; ++i) {
-        response.data[response.size++] = remote_response.data[i];
-
-        if (response.size >= sizeof(response.data)) {
-            response.size = 0;
-            return response;
-        }
-    }
-
-    return response;
-}
+struct telnet_opt_handler_response_type telnet_opt_handle(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg, TELNET_FLAG
+);
 
 const char *telnet_uchar_to_printable(unsigned char c);
 const char *telnet_uchar_to_string(unsigned char c);

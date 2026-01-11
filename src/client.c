@@ -298,11 +298,11 @@ static void client_handle_incoming_terminal_iac(
         case TELNET_OPT_SGA:
         case TELNET_OPT_BINARY: {
             auto handler = opt_handlers[data[2]];
-            auto result = telnet_opt_handle(
+            auto response = telnet_opt_handle(
                 handler.opt, data[1], data[2], handler.flags
             );
 
-            handler.write(client, (char *) result.data, result.size);
+            handler.write(client, (char *) response.data, response.size);
 
             break;
         }

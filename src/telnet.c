@@ -181,6 +181,131 @@ size_t telnet_get_iac_nonblocking_length(
     return iac ? SIZEVAL(iac - ((const char *) data)) : length;
 }
 
+static struct telnet_opt_handler_response_type telnet_opt_handle_local(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg
+) {
+    struct telnet_opt_handler_response_type response = {};
+
+    if (!opt) return response;
+
+    switch (cmd) {
+        case TELNET_DO: {
+            if (opt->local.enabled) {
+                break;
+            }
+
+            if (!opt->local.sent_will) {
+                response = (struct telnet_opt_handler_response_type) {
+                    .data = { TELNET_IAC, TELNET_WILL, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_local_enable(opt);
+
+            break;
+        }
+        case TELNET_DONT: {
+            if (!opt->local.enabled) {
+                break;
+            }
+
+            if (!opt->local.sent_wont) {
+                response = (struct telnet_opt_handler_response_type) {
+                    .data = { TELNET_IAC, TELNET_WONT, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_local_disable(opt);
+
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    return response;
+}
+
+static struct telnet_opt_handler_response_type telnet_opt_handle_remote(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg
+) {
+    struct telnet_opt_handler_response_type response = {};
+
+    if (!opt) return response;
+
+    switch (cmd) {
+        case TELNET_WILL: {
+            if (opt->remote.enabled) {
+                break;
+            }
+
+            if (!opt->remote.sent_do) {
+                response = (struct telnet_opt_handler_response_type) {
+                    .data = { TELNET_IAC, TELNET_DO, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_remote_enable(opt);
+
+            break;
+        }
+        case TELNET_WONT: {
+            if (!opt->remote.enabled) {
+                break;
+            }
+
+            if (!opt->remote.sent_dont) {
+                response = (struct telnet_opt_handler_response_type) {
+                    .data = { TELNET_IAC, TELNET_DONT, arg },
+                    .size = 3
+                };
+            }
+
+            telnet_opt_remote_disable(opt);
+
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    return response;
+}
+
+struct telnet_opt_handler_response_type telnet_opt_handle(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg,
+    TELNET_FLAG flags
+) {
+    struct telnet_opt_handler_response_type response = {};
+
+    switch (cmd) {
+        case TELNET_DO:
+        case TELNET_DONT:
+        case TELNET_WILL:
+        case TELNET_WONT: {
+            break;
+        }
+        default: return response;
+    }
+
+    if (flags & TELNET_FLAG_LOCAL) {
+        response = telnet_opt_handle_local(opt, cmd, arg);
+    }
+
+    return (
+        response.size ? (
+            response
+        ) : (
+            flags & TELNET_FLAG_REMOTE
+        ) ? telnet_opt_handle_remote(opt, cmd, arg) : response
+    );
+}
+
 const char *telnet_uchar_to_printable(unsigned char c) {
     // TODO: make an array based lookup instead of the switch
     switch (c) {
