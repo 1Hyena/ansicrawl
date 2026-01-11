@@ -248,152 +248,61 @@ static void client_handle_incoming_terminal_iac(
         LOG("terminal:iac -> client: %s", stackbuf);
     }
 
+    struct {
+        bool (*write) (CLIENT *, const char *, size_t);
+        struct telnet_opt_type* opt;
+        TELNET_FLAG flags;
+    } opt_handlers[] = {
+        [TELNET_OPT_NAWS] = {
+            .write  = client_write_to_terminal,
+            .opt    = &client->telopt.terminal.naws,
+            .flags  = TELNET_FLAG_REMOTE
+        },
+        [TELNET_OPT_ECHO] = {
+            .write  = client_write_to_terminal,
+            .opt    = &client->telopt.terminal.echo,
+            .flags  = TELNET_FLAG_LOCAL
+        },
+        [TELNET_OPT_SGA] = {
+            .write  = client_write_to_terminal,
+            .opt    = &client->telopt.terminal.sga,
+            .flags  = TELNET_FLAG_LOCAL|TELNET_FLAG_REMOTE
+        },
+        [TELNET_OPT_BINARY] = {
+            .write  = client_write_to_terminal,
+            .opt    = &client->telopt.terminal.bin,
+            .flags  = TELNET_FLAG_LOCAL|TELNET_FLAG_REMOTE
+        }
+    };
+
     switch (data[2]) {
         case TELNET_OPT_NAWS: {
-            switch (data[1]) {
-                case TELNET_DO:
-                case TELNET_DONT:
-                case TELNET_WILL:
-                case TELNET_WONT: {
-                    auto response = telnet_opt_handle_remote(
-                        &client->telopt.terminal.naws, data[1], data[2]
-                    );
-
-                    if (response.size) {
-                        client_write_to_terminal(
-                            client, (const char *) response.data, response.size
-                        );
-                    }
-
+            if (data[1] == TELNET_SB) {
+                if (!client->telopt.terminal.naws.remote.enabled) {
                     break;
                 }
-                case TELNET_SB: {
-                    if (!client->telopt.terminal.naws.remote.enabled) {
-                        break;
-                    }
 
-                    auto message = telnet_deserialize_naws_packet(data, size);
+                auto message = telnet_deserialize_naws_packet(data, size);
 
-                    if (client->screen.width != message.width
-                    ||  client->screen.height != message.height) {
-                        client->screen.width = message.width;
-                        client->screen.height = message.height;
-                        client->bitset.reformat = true;
-                    }
-
-                    break;
+                if (client->screen.width != message.width
+                ||  client->screen.height != message.height) {
+                    client->screen.width = message.width;
+                    client->screen.height = message.height;
+                    client->bitset.reformat = true;
                 }
-                default: {
-                    break;
-                }
+
+                break;
             }
-
-            break;
-        }
-        case TELNET_OPT_ECHO: {
-            switch (data[1]) {
-                case TELNET_WILL:
-                case TELNET_WONT:
-                case TELNET_DO:
-                case TELNET_DONT: {
-                    auto response = telnet_opt_handle_local(
-                        &client->telopt.terminal.echo, data[1], data[2]
-                    );
-
-                    if (response.size) {
-                        client_write_to_terminal(
-                            client, (const char *) response.data, response.size
-                        );
-                    }
-
-                    break;
-                }
-                default: {
-                    break;
-                }
-            }
-
-            break;
-        }
-        case TELNET_OPT_SGA: {
-            switch (data[1]) {
-                case TELNET_WILL:
-                case TELNET_WONT:
-                case TELNET_DO:
-                case TELNET_DONT: {
-                    {
-                        auto response = telnet_opt_handle_local(
-                            &client->telopt.terminal.sga, data[1], data[2]
-                        );
-
-                        if (response.size) {
-                            client_write_to_terminal(
-                                client, (const char *) response.data,
-                                response.size
-                            );
-                        }
-                    }
-
-                    {
-                        auto response = telnet_opt_handle_remote(
-                            &client->telopt.terminal.sga, data[1], data[2]
-                        );
-
-                        if (response.size) {
-                            client_write_to_terminal(
-                                client, (const char *) response.data,
-                                response.size
-                            );
-                        }
-                    }
-
-                    break;
-                }
-                default: {
-                    break;
-                }
-            }
-
-            break;
-        }
+        } [[fallthrough]];
+        case TELNET_OPT_ECHO:
+        case TELNET_OPT_SGA:
         case TELNET_OPT_BINARY: {
-            switch (data[1]) {
-                case TELNET_WILL:
-                case TELNET_WONT:
-                case TELNET_DO:
-                case TELNET_DONT: {
-                    {
-                        auto response = telnet_opt_handle_local(
-                            &client->telopt.terminal.bin, data[1], data[2]
-                        );
+            auto handler = opt_handlers[data[2]];
+            auto result = telnet_opt_handle(
+                handler.opt, data[1], data[2], handler.flags
+            );
 
-                        if (response.size) {
-                            client_write_to_terminal(
-                                client, (const char *) response.data,
-                                response.size
-                            );
-                        }
-                    }
-
-                    {
-                        auto response = telnet_opt_handle_remote(
-                            &client->telopt.terminal.bin, data[1], data[2]
-                        );
-
-                        if (response.size) {
-                            client_write_to_terminal(
-                                client, (const char *) response.data,
-                                response.size
-                            );
-                        }
-                    }
-
-                    break;
-                }
-                default: {
-                    break;
-                }
-            }
+            handler.write(client, (char *) result.data, result.size);
 
             break;
         }

@@ -27,6 +27,11 @@ struct telnet_opt_type {
 };
 
 typedef enum : uint8_t {
+    TELNET_FLAG_LOCAL   = (1 << 0),
+    TELNET_FLAG_REMOTE  = (1 << 1)
+} TELNET_FLAG;
+
+typedef enum : uint8_t {
     TELNET_OPT_BINARY       = 0,   // 8-bit data path
     TELNET_OPT_ECHO         = 1,   // echo
     TELNET_MSDP_VAR         = 1,
@@ -172,6 +177,8 @@ static inline struct telnet_opt_local_response_type {
 ) {
     struct telnet_opt_local_response_type response = {};
 
+    if (!opt) return response;
+
     switch (cmd) {
         case TELNET_DO: {
             if (opt->local.enabled) {
@@ -221,6 +228,8 @@ static inline struct telnet_opt_remote_response_type {
 ) {
     struct telnet_opt_remote_response_type response = {};
 
+    if (!opt) return response;
+
     switch (cmd) {
         case TELNET_WILL: {
             if (opt->remote.enabled) {
@@ -256,6 +265,56 @@ static inline struct telnet_opt_remote_response_type {
         }
         default: {
             break;
+        }
+    }
+
+    return response;
+}
+
+static inline struct telnet_opt_handler_response_type {
+    uint8_t data[7];
+    uint8_t size;
+} telnet_opt_handle(
+    struct telnet_opt_type *opt, TELNET_CODE cmd, TELNET_CODE arg,
+    TELNET_FLAG flags
+) {
+    struct telnet_opt_handler_response_type response = {};
+    struct telnet_opt_local_response_type local_response = {};
+    struct telnet_opt_remote_response_type remote_response = {};
+
+    switch (cmd) {
+        case TELNET_DO:
+        case TELNET_DONT:
+        case TELNET_WILL:
+        case TELNET_WONT: {
+            break;
+        }
+        default: return response;
+    }
+
+    if (flags & TELNET_FLAG_LOCAL) {
+        local_response = telnet_opt_handle_local(opt, cmd, arg);
+    }
+
+    if (flags & TELNET_FLAG_REMOTE) {
+        remote_response = telnet_opt_handle_remote(opt, cmd, arg);
+    }
+
+    for (size_t i=0; i<local_response.size; ++i) {
+        response.data[response.size++] = local_response.data[i];
+
+        if (response.size >= sizeof(response.data)) {
+            response.size = 0;
+            return response;
+        }
+    }
+
+    for (size_t i=0; i<remote_response.size; ++i) {
+        response.data[response.size++] = remote_response.data[i];
+
+        if (response.size >= sizeof(response.data)) {
+            response.size = 0;
+            return response;
         }
     }
 
