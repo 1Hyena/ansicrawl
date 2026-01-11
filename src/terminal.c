@@ -14,15 +14,14 @@
 static void terminal_die(TERMINAL *terminal);
 static void terminal_enable_raw_mode(TERMINAL *terminal);
 static void terminal_disable_raw_mode(TERMINAL *terminal);
-static void terminal_update_interface(TERMINAL *terminal);
+static void terminal_update_dispatcher(TERMINAL *terminal);
 static void terminal_update_client(TERMINAL *terminal);
 static void terminal_update_state(TERMINAL *terminal);
 static bool terminal_read_from_client(TERMINAL *);
-static bool terminal_read_from_interface(TERMINAL *);
-static bool terminal_write_to_interface(TERMINAL *, const char *, size_t len);
+static bool terminal_read_from_dispatcher(TERMINAL *);
+static bool terminal_write_to_dispatcher(TERMINAL *, const char *, size_t len);
 static bool terminal_write_to_client(TERMINAL *, const char *, size_t len);
 static bool terminal_flush_outgoing(TERMINAL *);
-static bool terminal_fetch_incoming(TERMINAL *);
 static void terminal_shutdown(TERMINAL *);
 static void terminal_handle_incoming_client_iac(
     TERMINAL *, const uint8_t *data, size_t sz
@@ -30,16 +29,16 @@ static void terminal_handle_incoming_client_iac(
 static void terminal_handle_incoming_client_txt(
     TERMINAL *terminal, const uint8_t *data, size_t size
 );
-static void terminal_handle_incoming_interface_iac(
+static void terminal_handle_incoming_dispatcher_iac(
     TERMINAL *, const uint8_t *data, size_t sz
 );
-static void terminal_handle_incoming_interface_esc(
+static void terminal_handle_incoming_dispatcher_esc(
     TERMINAL *, const uint8_t *data, size_t sz
 );
-static void terminal_handle_incoming_interface_txt(
+static void terminal_handle_incoming_dispatcher_txt(
     TERMINAL *, const uint8_t *data, size_t sz
 );
-static bool terminal_handle_incoming_interface_esc_screen_size(
+static bool terminal_handle_incoming_dispatcher_esc_screen_size(
     TERMINAL *terminal, const uint8_t *data, size_t size
 );
 static size_t terminal_get_esc_blocking_length(
@@ -57,8 +56,8 @@ TERMINAL *terminal_create() {
         return nullptr;
     }
 
-    if (!(terminal->io.interface.incoming.clip = clip_create_byte_array())
-    ||  !(terminal->io.interface.outgoing.clip = clip_create_byte_array())
+    if (!(terminal->io.dispatcher.incoming.clip = clip_create_byte_array())
+    ||  !(terminal->io.dispatcher.outgoing.clip = clip_create_byte_array())
     ||  !(terminal->io.client.incoming.clip = clip_create_byte_array())
     ||  !(terminal->io.client.outgoing.clip = clip_create_byte_array())) {
         terminal_destroy(terminal);
@@ -74,8 +73,8 @@ void terminal_destroy(TERMINAL *terminal) {
         return;
     }
 
-    clip_destroy(terminal->io.interface.incoming.clip);
-    clip_destroy(terminal->io.interface.outgoing.clip);
+    clip_destroy(terminal->io.dispatcher.incoming.clip);
+    clip_destroy(terminal->io.dispatcher.outgoing.clip);
     clip_destroy(terminal->io.client.incoming.clip);
     clip_destroy(terminal->io.client.outgoing.clip);
 
@@ -124,13 +123,11 @@ bool terminal_update(TERMINAL *terminal) {
         terminal_shutdown(terminal);
     }
 
-    bool fetched = terminal_fetch_incoming(terminal);
-
-    terminal_update_interface(terminal);
+    terminal_update_dispatcher(terminal);
     terminal_update_state(terminal);
     terminal_update_client(terminal);
 
-    return terminal_flush_outgoing(terminal) || fetched;
+    return terminal_flush_outgoing(terminal);
 }
 
 static void terminal_die(TERMINAL *terminal) {
@@ -151,8 +148,6 @@ static void terminal_disable_raw_mode(TERMINAL *terminal) {
         return;
     }
 
-    terminal_write_to_interface(terminal, "\x1b[?47l", 0);
-    terminal_write_to_interface(terminal, "\x1b" "8", 0);
     terminal_flush_outgoing(terminal);
 
     terminal->bitset.raw = false;
@@ -182,8 +177,6 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
 
     terminal->bitset.raw = true;
 
-    terminal_write_to_interface(terminal, "\x1b" "7", 0);
-    terminal_write_to_interface(terminal, "\x1b[?47h", 0);
     LOG("terminal: enabled raw mode");
 }
 
@@ -191,8 +184,8 @@ static bool terminal_task_ask_screen_size(TERMINAL *terminal) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        if (!terminal_write_to_interface(terminal, "\x1b[9999C\x1b[9999B", 0)
-        ||  !terminal_write_to_interface(terminal, "\x1b[6n", 0)) {
+        if (!terminal_write_to_dispatcher(terminal, "\x1b[9999C\x1b[9999B", 0)
+        ||  !terminal_write_to_dispatcher(terminal, "\x1b[6n", 0)) {
             BUG("failed to ask screen size");
             terminal_die(terminal);
             return false;
@@ -271,8 +264,8 @@ static void terminal_update_state(TERMINAL *terminal) {
     }
 }
 
-static void terminal_update_interface(TERMINAL *terminal) {
-    while (terminal_read_from_interface(terminal));
+static void terminal_update_dispatcher(TERMINAL *terminal) {
+    while (terminal_read_from_dispatcher(terminal));
 }
 
 static void terminal_update_client(TERMINAL *terminal) {
@@ -432,10 +425,10 @@ static void terminal_handle_incoming_client_txt(
 
     LOG("client:txt -> terminal: %lu byte%s", size, size == 1 ? "" : "s");
 
-    terminal_write_to_interface(terminal, (const char *) data, size);
+    terminal_write_to_dispatcher(terminal, (const char *) data, size);
 }
 
-static void terminal_handle_incoming_interface_iac(
+static void terminal_handle_incoming_dispatcher_iac(
     TERMINAL *terminal, const uint8_t *data, size_t size
 ) {
     if (!data || size < 2 || data[0] != TELNET_IAC) {
@@ -446,7 +439,7 @@ static void terminal_handle_incoming_interface_iac(
     terminal_write_to_client(terminal, (const char *) data, size);
 }
 
-static void terminal_handle_incoming_interface_esc(
+static void terminal_handle_incoming_dispatcher_esc(
     TERMINAL *terminal, const uint8_t *data, size_t size
 ) {
     if (!data || size < 1 || data[0] != TERMINAL_ESC) {
@@ -454,9 +447,9 @@ static void terminal_handle_incoming_interface_esc(
         return;
     }
 
-    log_esc("interface", "terminal", data, size);
+    log_esc("dispatcher", "terminal", data, size);
 
-    bool handled = terminal_handle_incoming_interface_esc_screen_size(
+    bool handled = terminal_handle_incoming_dispatcher_esc_screen_size(
         terminal, data, size
     );
 
@@ -467,7 +460,7 @@ static void terminal_handle_incoming_interface_esc(
     terminal_write_to_client(terminal, (const char *) data, size);
 }
 
-static void terminal_handle_incoming_interface_txt(
+static void terminal_handle_incoming_dispatcher_txt(
     TERMINAL *terminal, const uint8_t *data, size_t size
 ) {
     if (!data || size < 1) {
@@ -475,13 +468,13 @@ static void terminal_handle_incoming_interface_txt(
         return;
     }
 
-    log_txt("interface", "terminal", data, size);
+    log_txt("dispatcher", "terminal", data, size);
 
     terminal_write_to_client(terminal, (const char *) data, size);
 }
 
-static bool terminal_read_from_interface(TERMINAL *terminal) {
-    CLIP *clip = terminal->io.interface.incoming.clip;
+static bool terminal_read_from_dispatcher(TERMINAL *terminal) {
+    CLIP *clip = terminal->io.dispatcher.incoming.clip;
 
     if (clip_is_empty(clip)) {
         return false;
@@ -498,7 +491,7 @@ static bool terminal_read_from_interface(TERMINAL *terminal) {
         if (nonblocking_sz) {
             CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
 
-            terminal_handle_incoming_interface_txt(
+            terminal_handle_incoming_dispatcher_txt(
                 terminal,
                 clip_get_byte_array(nonblocking), clip_get_size(nonblocking)
             );
@@ -513,7 +506,7 @@ static bool terminal_read_from_interface(TERMINAL *terminal) {
         if (blocking_sz) {
             CLIP *blocking = clip_shift(clip, blocking_sz);
 
-            terminal_handle_incoming_interface_esc(
+            terminal_handle_incoming_dispatcher_esc(
                 terminal,
                 clip_get_byte_array(blocking), clip_get_size(blocking)
             );
@@ -531,7 +524,7 @@ static bool terminal_read_from_interface(TERMINAL *terminal) {
     if (blocking_sz) {
         CLIP *blocking = clip_shift(clip, blocking_sz);
 
-        terminal_handle_incoming_interface_iac(
+        terminal_handle_incoming_dispatcher_iac(
             terminal, clip_get_byte_array(blocking), clip_get_size(blocking)
         );
 
@@ -585,11 +578,11 @@ static bool terminal_read_from_client(TERMINAL *terminal) {
     return false;
 }
 
-static bool terminal_write_to_interface(
+static bool terminal_write_to_dispatcher(
     TERMINAL *terminal, const char *str, size_t len
 ) {
     return clip_append_byte_array(
-        terminal->io.interface.outgoing.clip,
+        terminal->io.dispatcher.outgoing.clip,
         (const uint8_t *) str, len ? len : strlen(str)
     );
 }
@@ -607,52 +600,6 @@ static bool terminal_write_to_client(
     );
 }
 
-static bool terminal_fetch_incoming(TERMINAL *terminal) {
-    if (!terminal) {
-        return false;
-    }
-
-    bool fetched = false;
-
-    {
-        CLIP *src = global.io.incoming.clip;
-
-        if (!clip_is_empty(src)) {
-            CLIP *dst = terminal->io.interface.incoming.clip;
-
-            bool appended = clip_append_clip(dst, src);
-
-            if (!appended) {
-                FUSE();
-            }
-
-            clip_clear(src);
-
-            fetched = true;
-        }
-    }
-
-    {
-        CLIP *src = global.client->io.terminal.outgoing.clip;
-
-        if (!clip_is_empty(src)) {
-            CLIP *dst = terminal->io.client.incoming.clip;
-
-            bool appended = clip_append_clip(dst, src);
-
-            if (!appended) {
-                FUSE();
-            }
-
-            clip_clear(src);
-
-            fetched = true;
-        }
-    }
-
-    return fetched;
-}
-
 static bool terminal_flush_outgoing(TERMINAL *terminal) {
     if (!terminal) {
         return false;
@@ -661,7 +608,7 @@ static bool terminal_flush_outgoing(TERMINAL *terminal) {
     bool flushed = false;
 
     {
-        CLIP *src = terminal->io.interface.outgoing.clip;
+        CLIP *src = terminal->io.dispatcher.outgoing.clip;
 
         if (!clip_is_empty(src)) {
             CLIP *dst = global.io.outgoing.clip;
@@ -712,7 +659,7 @@ static size_t terminal_get_esc_nonblocking_length(
     return esc ? SIZEVAL(esc - ((const char *) data)) : length;
 }
 
-static struct terminal_incoming_interface_esc_screen_size_type{
+static struct terminal_incoming_dispatcher_esc_screen_size_type{
     const char *end;
     struct {
         const char *str;
@@ -724,10 +671,10 @@ static struct terminal_incoming_interface_esc_screen_size_type{
         uint8_t size;
         long value;
     } width;
-} terminal_parse_incoming_interface_esc_screen_size(
+} terminal_parse_incoming_dispatcher_esc_screen_size(
     const char *str, size_t str_sz
 ) {
-    const struct terminal_incoming_interface_esc_screen_size_type
+    const struct terminal_incoming_dispatcher_esc_screen_size_type
     incomplete = { .end = nullptr },
     invalid    = { .end = str };
 
@@ -794,7 +741,7 @@ static struct terminal_incoming_interface_esc_screen_size_type{
         return invalid;
     }
 
-    return (struct terminal_incoming_interface_esc_screen_size_type) {
+    return (struct terminal_incoming_dispatcher_esc_screen_size_type) {
         .end = ++next,
         .height = {
             .str = height_str,
@@ -809,7 +756,7 @@ static struct terminal_incoming_interface_esc_screen_size_type{
     };
 }
 
-static bool terminal_handle_incoming_interface_esc_screen_size(
+static bool terminal_handle_incoming_dispatcher_esc_screen_size(
     TERMINAL *terminal, const uint8_t *data, size_t size
 ) {
     if (terminal->state != TERMINAL_GET_SCREEN_SIZE) {
@@ -817,7 +764,7 @@ static bool terminal_handle_incoming_interface_esc_screen_size(
     }
 
     const char *str = (const char *) data;
-    auto result = terminal_parse_incoming_interface_esc_screen_size(str, size);
+    auto result = terminal_parse_incoming_dispatcher_esc_screen_size(str, size);
 
     if (result.end != str + size) {
         BUG("failed to get screen size");
@@ -853,7 +800,7 @@ static size_t terminal_get_esc_blocking_length(
     const char *next = str;
 
     if (next == str) {
-        next = terminal_parse_incoming_interface_esc_screen_size(
+        next = terminal_parse_incoming_dispatcher_esc_screen_size(
             str, size
         ).end;
     }

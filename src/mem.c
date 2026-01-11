@@ -316,3 +316,20 @@ TERMINAL *mem_new_terminal() {
 void mem_free_terminal(TERMINAL *terminal) {
     mem_free(mem_get_metadata(terminal, alignof(typeof(*terminal))));
 }
+
+DISPATCHER *mem_new_dispatcher() {
+    static DISPATCHER zero;
+
+    MEM *mem = mem_new(alignof(typeof(zero)), sizeof(zero));
+    DISPATCHER *dispatcher = mem ? mem->data : nullptr;
+
+    if (dispatcher) {
+        *dispatcher = zero;
+    }
+
+    return dispatcher;
+}
+
+void mem_free_dispatcher(DISPATCHER *dispatcher) {
+    mem_free(mem_get_metadata(dispatcher, alignof(typeof(*dispatcher))));
+}

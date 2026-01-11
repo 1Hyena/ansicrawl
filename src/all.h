@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "client.h"
 #include "clip.h"
+#include "dispatcher.h"
 #include "flags.h"
 #include "global.h"
 #include "log.h"

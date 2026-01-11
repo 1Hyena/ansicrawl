@@ -77,7 +77,7 @@ struct TERMINAL {
             struct {
                 CLIP *clip;
             } outgoing;
-        } interface;
+        } dispatcher;
 
         struct {
             struct {

@@ -21,6 +21,16 @@ struct CLIENT {
                 size_t total;
             } outgoing;
         } terminal;
+
+        struct {
+            struct {
+                CLIP *clip;
+            } incoming;
+
+            struct {
+                CLIP *clip;
+            } outgoing;
+        } dispatcher;
     } io;
 
     struct {

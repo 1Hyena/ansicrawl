@@ -6,10 +6,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+static bool client_read_from_dispatcher(CLIENT *client);
 static bool client_read_from_terminal(CLIENT *client);
 static bool client_write_to_terminal(CLIENT *, const char *str, size_t len);
 static bool client_flush_outgoing(CLIENT *);
-static bool client_fetch_incoming(CLIENT *);
+static void client_update_dispatcher(CLIENT *client);
 static void client_update_terminal(CLIENT *client);
 static void client_update_screen(CLIENT *client);
 static void client_shutdown(CLIENT *);
@@ -46,9 +47,11 @@ CLIENT *client_create() {
         return nullptr;
     }
 
-    if ((client->io.terminal.incoming.clip = clip_create_byte_array()) ==nullptr
-    || !(client->io.terminal.outgoing.clip = clip_create_byte_array())
-    || !(client->screen.clip = clip_create_byte_array())) {
+    if (!(client->io.terminal.incoming.clip = clip_create_byte_array())
+    ||  !(client->io.terminal.outgoing.clip = clip_create_byte_array())
+    ||  !(client->io.dispatcher.incoming.clip = clip_create_byte_array())
+    ||  !(client->io.dispatcher.outgoing.clip = clip_create_byte_array())
+    ||  !(client->screen.clip = clip_create_byte_array())) {
         client_destroy(client);
 
         return nullptr;
@@ -64,6 +67,8 @@ void client_destroy(CLIENT *client) {
 
     clip_destroy(client->io.terminal.incoming.clip);
     clip_destroy(client->io.terminal.outgoing.clip);
+    clip_destroy(client->io.dispatcher.incoming.clip);
+    clip_destroy(client->io.dispatcher.outgoing.clip);
     clip_destroy(client->screen.clip);
 
     mem_free_client(client);
@@ -76,7 +81,11 @@ void client_init(CLIENT *client) {
     client->telopt.terminal.sga.remote.wanted = true;
     client->telopt.terminal.bin.local.wanted = true;
     client->telopt.terminal.bin.remote.wanted = true;
-    //client_write_to_terminal(client, "\x1b[7l", 0);
+
+    client_write_to_terminal(client, "\x1b" "7", 0);
+    client_write_to_terminal(client, "\x1b[?47h", 0);
+
+    client_write_to_terminal(client, "\x1b[?7l", 0); // wrapping off
 }
 
 void client_deinit(CLIENT *client) {
@@ -87,16 +96,15 @@ bool client_update(CLIENT *client) {
         return false;
     }
 
+    client_update_dispatcher(client);
+    client_update_terminal(client);
+    client_update_screen(client);
+
     if (global.bitset.shutdown) {
         client_shutdown(client);
     }
 
-    bool fetched = client_fetch_incoming(client);
-
-    client_update_terminal(client);
-    client_update_screen(client);
-
-    return client_flush_outgoing(client) || fetched;
+    return client_flush_outgoing(client);
 }
 
 static void client_shutdown(CLIENT *client) {
@@ -104,7 +112,11 @@ static void client_shutdown(CLIENT *client) {
         return;
     }
 
-    client_write_to_terminal(client, "\x1b[9999;1H", 0);
+    client_write_to_terminal(client, "\x1b[?7h", 0); // wrapping on
+
+    client_write_to_terminal(client, "\x1b[?47l", 0);
+    client_write_to_terminal(client, "\x1b" "8", 0);
+
     client->bitset.shutdown = true;
 }
 
@@ -307,6 +319,34 @@ static void client_update_screen(CLIENT *client) {
     }
 }
 
+static void client_update_dispatcher(CLIENT *client) {
+    while (client_read_from_dispatcher(client));
+}
+
+static bool client_read_from_dispatcher(CLIENT *client) {
+    CLIP *src = client->io.dispatcher.incoming.clip;
+
+    if (clip_is_empty(src)) {
+        return false;
+    }
+
+    CLIP *dst = client->io.terminal.incoming.clip;
+
+    if (clip_is_empty(dst)) {
+        clip_swap(dst, src);
+        return true;
+    }
+
+    bool appended = clip_append_clip(dst, src);
+
+    if (!appended) {
+        FUSE();
+    }
+
+    clip_clear(src);
+    return true;
+}
+
 static void client_update_terminal(CLIENT *client) {
     if (client->bitset.shutdown) {
         return;
@@ -423,34 +463,6 @@ static bool client_write_to_terminal(
         client->io.terminal.outgoing.clip,
         (const uint8_t *) str, len ? len : strlen(str)
     );
-}
-
-static bool client_fetch_incoming(CLIENT *client) {
-    if (!client) {
-        return false;
-    }
-
-    CLIP *src = (
-        global.terminal ? (
-            global.terminal->io.client.outgoing.clip
-        ) : global.io.incoming.clip
-    );
-
-    if (!clip_is_empty(src)) {
-        CLIP *dst = client->io.terminal.incoming.clip;
-
-        bool appended = clip_append_clip(dst, src);
-
-        if (!appended) {
-            FUSE();
-        }
-
-        clip_clear(src);
-
-        return true;
-    }
-
-    return false;
 }
 
 static bool client_flush_outgoing(CLIENT *client) {

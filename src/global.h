@@ -14,12 +14,13 @@
 #define MAX_STRING_LENGTH   4608
 #define MAX_INPUT_LENGTH    256
 
-typedef struct MEM      MEM;
-typedef struct USER     USER;
-typedef struct CLIENT   CLIENT;
-typedef struct SERVER   SERVER;
-typedef struct CLIP     CLIP;
-typedef struct TERMINAL TERMINAL;
+typedef struct MEM          MEM;
+typedef struct USER         USER;
+typedef struct CLIENT       CLIENT;
+typedef struct SERVER       SERVER;
+typedef struct CLIP         CLIP;
+typedef struct TERMINAL     TERMINAL;
+typedef struct DISPATCHER   DISPATCHER;
 
 struct global_type {
     struct {
@@ -58,10 +59,11 @@ struct global_type {
         size_t update;
     } count;
 
+    DISPATCHER *dispatcher;
     TERMINAL *terminal;
-    CLIP *logbuf;
     SERVER *server;
     CLIENT *client;
+    CLIP *logbuf;
 
     struct {
         bool shutdown:1;

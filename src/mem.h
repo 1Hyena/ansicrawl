@@ -32,5 +32,8 @@ CLIENT *            mem_new_client      ();
 void                mem_free_client     (CLIENT *);
 TERMINAL *          mem_new_terminal    ();
 void                mem_free_terminal   (TERMINAL *);
+DISPATCHER *        mem_new_dispatcher  ();
+void                mem_free_dispatcher (DISPATCHER *);
+
 
 #endif

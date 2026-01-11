@@ -53,6 +53,7 @@ static void main_init(int argc, char **argv) {
 
     global.io.incoming.clip = clip_create_byte_array();
     global.io.outgoing.clip = clip_create_byte_array();
+    global.dispatcher = dispatcher_create();
     global.terminal = isatty(STDIN_FILENO) ? terminal_create() : nullptr;
     global.logbuf = clip_create_char_array();
     global.client = client_create();
@@ -65,6 +66,7 @@ static void main_init(int argc, char **argv) {
 static void main_deinit() {
     client_deinit(global.client);
     terminal_deinit(global.terminal);
+    dispatcher_deinit(global.dispatcher);
 
     main_flush_outgoing();
 
@@ -86,6 +88,9 @@ static void main_deinit() {
 
     terminal_destroy(global.terminal);
     global.terminal = nullptr;
+
+    dispatcher_destroy(global.dispatcher);
+    global.dispatcher = nullptr;
 
     clip_destroy(global.io.incoming.clip);
     global.io.incoming.clip = nullptr;
@@ -241,6 +246,7 @@ static bool main_update() {
 
     bool updated = false;
 
+    updated |= dispatcher_update(global.dispatcher);
     updated |= client_update(global.client);
     updated |= terminal_update(global.terminal);
 
