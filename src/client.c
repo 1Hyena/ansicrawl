@@ -86,6 +86,9 @@ void client_init(CLIENT *client) {
     client_write_to_terminal(client, "\x1b[?47h", 0);
 
     client_write_to_terminal(client, "\x1b[?7l", 0); // wrapping off
+
+    client_write_to_terminal(client, TERMINAL_ESC_HIDE_CURSOR, 0);
+    client_write_to_terminal(client, TERMINAL_ESC_HOME_CURSOR, 0);
 }
 
 void client_deinit(CLIENT *client) {
@@ -116,6 +119,7 @@ static void client_shutdown(CLIENT *client) {
 
     client_write_to_terminal(client, "\x1b[?47l", 0);
     client_write_to_terminal(client, "\x1b" "8", 0);
+    client_write_to_terminal(client, TERMINAL_ESC_SHOW_CURSOR, 0);
 
     client->bitset.shutdown = true;
 }
@@ -291,15 +295,12 @@ static void client_screen_redraw(CLIENT *client) {
         clip_swap(clip, client->screen.clip);
         client->screen.hash = hash;
 
-        client_write_to_terminal(client, TERMINAL_ESC_HIDE_CURSOR, 0);
         client_write_to_terminal(client, TERMINAL_ESC_HOME_CURSOR, 0);
         client_write_to_terminal(
             client,
             (const char *) clip_get_byte_array(client->screen.clip),
             clip_get_size(client->screen.clip)
         );
-        client_write_to_terminal(client, TERMINAL_ESC_HOME_CURSOR, 0);
-        client_write_to_terminal(client, TERMINAL_ESC_SHOW_CURSOR, 0);
     }
 
     clip_destroy(clip);

@@ -28,30 +28,21 @@ typedef enum : uint8_t {
     TERMINAL_ESC = 27   // ANSI escape character
 } TERMINAL_CODE;
 
-static const char TERMINAL_ESC_HIDE_CURSOR[] = {
-    (char) TERMINAL_ESC, '[', '?', '2', '5', 'l', '\0'
-};
-
-static const char TERMINAL_ESC_SHOW_CURSOR[] = {
-    (char) TERMINAL_ESC, '[', '?', '2', '5', 'h', '\0'
-};
-
-static const char TERMINAL_ESC_HOME_CURSOR[] = {
-    (char) TERMINAL_ESC, '[', 'H', '\0'
-};
-
 static constexpr size_t TERMINAL_DEFAULT_WIDTH          = 80;
 static constexpr size_t TERMINAL_DEFAULT_HEIGHT         = 24;
-static constexpr char   TERMINAL_ESC_HIDDEN[]           = "\033[8m";
-static constexpr char   TERMINAL_ESC_HIDDEN_RESET[]     = "\033[28m";
-static constexpr char   TERMINAL_ESC_BOLD[]             = "\033[1m";
-static constexpr char   TERMINAL_ESC_FAINT[]            = "\033[2m";
-static constexpr char   TERMINAL_ESC_ITALIC[]           = "\033[3m";
-static constexpr char   TERMINAL_ESC_UNDERLINE[]        = "\033[4m";
-static constexpr char   TERMINAL_ESC_BLINKING[]         = "\033[5m";
-static constexpr char   TERMINAL_ESC_REVERSE[]          = "\033[7m";
-static constexpr char   TERMINAL_ESC_STRIKETHROUGH[]    = "\033[9m";
-static constexpr char   TERMINAL_ESC_RESET[]            = "\033[0m";
+static constexpr char   TERMINAL_ESC_HIDE_CURSOR[]      = "\x1b[?25l";
+static constexpr char   TERMINAL_ESC_SHOW_CURSOR[]      = "\x1b[?25h";
+static constexpr char   TERMINAL_ESC_HOME_CURSOR[]      = "\x1b[H";
+static constexpr char   TERMINAL_ESC_HIDDEN[]           = "\x1b[8m";
+static constexpr char   TERMINAL_ESC_HIDDEN_RESET[]     = "\x1b[28m";
+static constexpr char   TERMINAL_ESC_BOLD[]             = "\x1b[1m";
+static constexpr char   TERMINAL_ESC_FAINT[]            = "\x1b[2m";
+static constexpr char   TERMINAL_ESC_ITALIC[]           = "\x1b[3m";
+static constexpr char   TERMINAL_ESC_UNDERLINE[]        = "\x1b[4m";
+static constexpr char   TERMINAL_ESC_BLINKING[]         = "\x1b[5m";
+static constexpr char   TERMINAL_ESC_REVERSE[]          = "\x1b[7m";
+static constexpr char   TERMINAL_ESC_STRIKETHROUGH[]    = "\x1b[9m";
+static constexpr char   TERMINAL_ESC_RESET[]            = "\x1b[0m";
 static constexpr char   TERMINAL_ESC_CLEAR_SCREEN[]     = "\x1b[H\x1b[2J";
 
 typedef enum : unsigned char {
