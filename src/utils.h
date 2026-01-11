@@ -7,11 +7,13 @@ bool fuse(const char *file, int line);
 size_t umax_size(size_t, size_t);
 size_t to_size(long a, const char *file, int line);
 unsigned short to_ushort(long a, const char *file, int line);
+uint8_t to_uint8(long a, const char *file, int line);
 
 #define FUSE() fuse( __builtin_FILE(), __builtin_LINE() )
 
 #define SIZEVAL(a) to_size((a), __FILE__, __LINE__)
 #define USHORTVAL(a) to_ushort((a), __FILE__, __LINE__)
+#define UINT8VAL(a) to_uint8((a), __FILE__, __LINE__)
 
 #define ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
 

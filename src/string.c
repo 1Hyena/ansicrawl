@@ -21,7 +21,7 @@ bool str_seg_to_long(const char *str, size_t str_sz, long *result) {
         buf[i++] = str[j];
     }
 
-    return str_to_long(buf, result);
+    return i + 1 >= ARRAY_LENGTH(buf) ? false : str_to_long(buf, result);
 }
 
 bool str_to_long(char const *s, long *i) {

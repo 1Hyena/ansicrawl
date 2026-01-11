@@ -6,6 +6,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+uint8_t to_uint8(long a, const char *file, int line) {
+    if (a > UINT8_MAX) {
+        a = UINT8_MAX;
+        fuse(file, line);
+    }
+    else if (a < 0) {
+        a = 0;
+        fuse(file, line);
+    }
+
+    return (uint8_t) a;
+}
+
 unsigned short to_ushort(long a, const char *file, int line) {
     if (a > USHRT_MAX) {
         a = USHRT_MAX;

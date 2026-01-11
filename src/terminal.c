@@ -192,8 +192,8 @@ static void terminal_enable_raw_mode(TERMINAL *terminal) {
 static bool terminal_task_ask_screen_size(TERMINAL *terminal) {
     struct winsize ws;
 
-    if (true || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        if (!terminal_write_to_interface(terminal, "\x1b[999C\x1b[999B", 0)
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+        if (!terminal_write_to_interface(terminal, "\x1b[9999C\x1b[9999B", 0)
         ||  !terminal_write_to_interface(terminal, "\x1b[6n", 0)) {
             BUG("failed to ask screen size");
             terminal_die(terminal);
@@ -895,21 +895,35 @@ static struct terminal_incoming_interface_esc_screen_size_type{
     const char *end;
     struct {
         const char *str;
-        size_t size;
+        uint8_t size;
+        long value;
     } height;
     struct {
         const char *str;
-        size_t size;
+        uint8_t size;
+        long value;
     } width;
 } terminal_parse_incoming_interface_esc_screen_size(
     const char *str, size_t str_sz
 ) {
-    struct terminal_incoming_interface_esc_screen_size_type result = {
-        .end = str
-    };
+    const struct terminal_incoming_interface_esc_screen_size_type
+    incomplete = { .end = nullptr },
+    invalid    = { .end = str };
 
-    if (str_sz <= 2 || *str != TERMINAL_ESC || str[1] != '[') {
-        return result;
+    if (!str_sz) {
+        return incomplete;
+    }
+    else if (*str != TERMINAL_ESC) {
+        return invalid;
+    }
+    else if (str_sz < 2) {
+        return incomplete;
+    }
+    else if (str[1] != '[') {
+        return invalid;
+    }
+    else if (str_sz < 3) {
+        return incomplete;
     }
 
     const char *s = str + 2;
@@ -917,25 +931,61 @@ static struct terminal_incoming_interface_esc_screen_size_type{
 
     next = str_seg_skip_digits(s, str_sz - SIZEVAL(s - str));
 
-    if (next > str + str_sz || *next != ';') return result;
+    if (next == s) {
+        return invalid;
+    }
+    else if (next == str + str_sz) {
+        return incomplete;
+    }
+    else if (*next != ';') {
+        return invalid;
+    }
 
-    result.height.str = s;
-    result.height.size = SIZEVAL(next - s);
+    const char *height_str = s;
+    uint8_t height_size = UINT8VAL(next - s);
+    long height_value = 0;
+
+    if (!str_seg_to_long(s, height_size, &height_value)) {
+        return invalid;
+    }
 
     s = ++next;
 
-    if (s > str + str_sz) return result;
+    if (s == str + str_sz) return incomplete;
 
     next = str_seg_skip_digits(s, str_sz - SIZEVAL(s - str));
 
-    if (next > str + str_sz || *next != 'R') return result;
+    if (next == s) {
+        return invalid;
+    }
+    else if (next == str + str_sz) {
+        return incomplete;
+    }
+    else if (*next != 'R') {
+        return invalid;
+    }
 
-    result.width.str = s;
-    result.width.size = SIZEVAL(next - s);
+    const char *width_str = s;
+    uint8_t width_size = UINT8VAL(next - s);
+    long width_value = 0;
 
-    result.end = ++next;
+    if (!str_seg_to_long(s, width_size, &width_value)) {
+        return invalid;
+    }
 
-    return result;
+    return (struct terminal_incoming_interface_esc_screen_size_type) {
+        .end = ++next,
+        .height = {
+            .str = height_str,
+            .size = height_size,
+            .value = height_value
+        },
+        .width = {
+            .str = width_str,
+            .size = width_size,
+            .value = width_value
+        }
+    };
 }
 
 static bool terminal_handle_incoming_interface_esc_screen_size(
@@ -948,19 +998,14 @@ static bool terminal_handle_incoming_interface_esc_screen_size(
     const char *str = (const char *) data;
     auto result = terminal_parse_incoming_interface_esc_screen_size(str, size);
 
-    long rows = 0;
-    long cols = 0;
-
-    bool success = (
-        str_seg_to_long(result.width.str, result.width.size, &cols) &&
-        str_seg_to_long(result.height.str, result.height.size, &rows)
-    );
-
-    if (!success) {
+    if (result.end != str + size) {
         BUG("failed to get screen size");
         terminal_die(terminal);
         return false;
     }
+
+    long rows = result.height.value;
+    long cols = result.width.value;
 
     terminal->screen.width = cols;
     terminal->screen.height = rows;
@@ -984,10 +1029,15 @@ static size_t terminal_get_esc_blocking_length(
     }
 
     const char *str = (const char *) data;
-    auto result = terminal_parse_incoming_interface_esc_screen_size(str, size);
-    const char *next = result.end;
+    const char *next = str;
 
-    return next == str ? 1 : SIZEVAL(next - str);
+    if (next == str) {
+        next = terminal_parse_incoming_interface_esc_screen_size(
+            str, size
+        ).end;
+    }
+
+    return next == nullptr ? 0 : next == str ? 1 : SIZEVAL(next - str);
 }
 
 static const char *terminal_get_esc_sequence_code(

@@ -78,6 +78,7 @@ void client_init(CLIENT *client) {
     client->telopt.terminal.sga.remote.wanted = true;
     client->telopt.terminal.bin.local.wanted = true;
     client->telopt.terminal.bin.remote.wanted = true;
+    //client_write_to_terminal(client, "\x1b[7l", 0);
 }
 
 void client_deinit(CLIENT *client) {
@@ -572,12 +573,6 @@ static bool client_read_from_terminal(CLIENT *client) {
         }
 
         return false;
-        /*
-        CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
-        clip_destroy(nonblocking);
-
-        return true;
-        */
     }
 
     size_t blocking_sz = telnet_get_iac_sequence_length(data, size);
@@ -672,12 +667,24 @@ static struct client_incoming_terminal_esc_tilde_key_type{
 } client_parse_incoming_terminal_esc_tilde_key(
     const char *str, size_t str_sz
 ) {
-    struct client_incoming_terminal_esc_tilde_key_type result = {
-        .end = str
-    };
+    const struct client_incoming_terminal_esc_tilde_key_type
+    incomplete = { .end = nullptr },
+    invalid    = { .end = str };
 
-    if (str_sz <= 2 || *str != TERMINAL_ESC || str[1] != '[') {
-        return result;
+    if (!str_sz) {
+        return incomplete;
+    }
+    else if (*str != TERMINAL_ESC) {
+        return invalid;
+    }
+    else if (str_sz < 2) {
+        return incomplete;
+    }
+    else if (str[1] != '[') {
+        return invalid;
+    }
+    else if (str_sz < 3) {
+        return incomplete;
     }
 
     const char *s = str + 2;
@@ -685,26 +692,36 @@ static struct client_incoming_terminal_esc_tilde_key_type{
 
     next = str_seg_skip_digits(s, str_sz - SIZEVAL(s - str));
 
-    if (next > str + str_sz || *next != '~') return result;
+    if (next == s) {
+        return invalid;
+    }
+    else if (next == str + str_sz) {
+        return incomplete;
+    }
+    else if (*next != '~') {
+        return invalid;
+    }
 
     size_t size = SIZEVAL(next - s);
     long value = 0;
+    TERMINAL_KEY key = TERMINAL_KEY_NONE;
 
     if (str_seg_to_long(s, size, &value)) {
         switch (value) {
-            case 2: result.key = TERMINAL_KEY_INS; break;
-            case 3: result.key = TERMINAL_KEY_DEL; break;
-            case 5: result.key = TERMINAL_KEY_PGUP; break;
-            case 6: result.key = TERMINAL_KEY_PGDN; break;
-            default: return result;
+            case 2: key = TERMINAL_KEY_INS; break;
+            case 3: key = TERMINAL_KEY_DEL; break;
+            case 5: key = TERMINAL_KEY_PGUP; break;
+            case 6: key = TERMINAL_KEY_PGDN; break;
+            default: return invalid;
         }
     }
 
-    result.str = s;
-    result.size = size;
-    result.end = ++next;
-
-    return result;
+    return (struct client_incoming_terminal_esc_tilde_key_type) {
+        .key = key,
+        .str = s,
+        .size = size,
+        .end = ++next
+    };
 }
 
 static bool client_handle_incoming_terminal_esc_tilde_key(
@@ -748,12 +765,24 @@ static struct client_incoming_terminal_esc_atomic_key_type{
 } client_parse_incoming_terminal_esc_atomic_key(
     const char *str, size_t str_sz
 ) {
-    struct client_incoming_terminal_esc_atomic_key_type result = {
-        .end = str
-    };
+    const struct client_incoming_terminal_esc_atomic_key_type
+    incomplete = { .end = nullptr },
+    invalid    = { .end = str };
 
-    if (str_sz <= 2 || *str != TERMINAL_ESC || str[1] != '[') {
-        return result;
+    if (!str_sz) {
+        return incomplete;
+    }
+    else if (*str != TERMINAL_ESC) {
+        return invalid;
+    }
+    else if (str_sz < 2) {
+        return incomplete;
+    }
+    else if (str[1] != '[') {
+        return invalid;
+    }
+    else if (str_sz < 3) {
+        return incomplete;
     }
 
     const char *s = str + 2;
@@ -761,24 +790,30 @@ static struct client_incoming_terminal_esc_atomic_key_type{
 
     next = str_seg_skip_utf8_symbol(s, str_sz - SIZEVAL(s - str));
 
-    if (next == s) return result;
-
-    switch (*s) {
-        case 'A': result.key = TERMINAL_KEY_UP; break;
-        case 'B': result.key = TERMINAL_KEY_DOWN; break;
-        case 'C': result.key = TERMINAL_KEY_RIGHT; break;
-        case 'D': result.key = TERMINAL_KEY_LEFT; break;
-        case 'E': result.key = TERMINAL_KEY_NOP; break;
-        case 'H': result.key = TERMINAL_KEY_HOME; break;
-        case 'F': result.key = TERMINAL_KEY_END; break;
-        default: return result;
+    if (next == s) {
+        return invalid;
     }
 
-    result.str = s;
-    result.size = SIZEVAL(next - s);
-    result.end = next;
+    size_t size = SIZEVAL(next - s);
+    TERMINAL_KEY key = TERMINAL_KEY_NONE;
 
-    return result;
+    switch (*s) {
+        case 'A': key = TERMINAL_KEY_UP; break;
+        case 'B': key = TERMINAL_KEY_DOWN; break;
+        case 'C': key = TERMINAL_KEY_RIGHT; break;
+        case 'D': key = TERMINAL_KEY_LEFT; break;
+        case 'E': key = TERMINAL_KEY_NOP; break;
+        case 'H': key = TERMINAL_KEY_HOME; break;
+        case 'F': key = TERMINAL_KEY_END; break;
+        default: return invalid;
+    }
+
+    return (struct client_incoming_terminal_esc_atomic_key_type) {
+        .key = key,
+        .str = s,
+        .size = size,
+        .end = next
+    };
 }
 
 static bool client_handle_incoming_terminal_esc_atomic_key(
@@ -849,7 +884,7 @@ static size_t client_get_esc_blocking_length(
         next = client_parse_incoming_terminal_esc_tilde_key(str, size).end;
     }
 
-    return next == str ? 1 : SIZEVAL(next - str);
+    return next == nullptr ? 0 : next == str ? 1 : SIZEVAL(next - str);
 }
 
 static size_t client_get_esc_nonblocking_length(
