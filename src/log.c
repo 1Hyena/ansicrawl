@@ -151,9 +151,120 @@ static void log_vwiznetf(
     else FUSE();
 }
 
-void log_wiznetf(long flag, long flag_skip, int min_level, const char *fmt, ...) {
+void log_wiznetf(
+    long flag, long flag_skip, int min_level, const char *fmt, ...
+) {
     va_list args;
     va_start(args, fmt);
     log_vwiznetf(flag, flag_skip, min_level, fmt, args);
     va_end(args);
+}
+
+void log_iac(
+    const char *src, const char *dst, const uint8_t *data, size_t size
+) {
+    char stackbuf[MAX_STACKBUF_SIZE] = "";
+
+    for (size_t i = 0; i<size; ++i) {
+        const char *code = telnet_get_iac_sequence_code(data, size, i);
+
+        if (code == nullptr) {
+            code = "NUL";
+            FUSE();
+        }
+
+        if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
+            LOG("%s: long IAC sequence (size %lu)", dst, size);
+
+            break;
+        }
+
+        strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
+
+        if (i + 1 < size) {
+            strncat(
+                stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
+            );
+        }
+    }
+
+    LOG("%s:iac -> %s: %s", src, dst, stackbuf);
+}
+
+void log_txt(
+    const char *src, const char *dst, const uint8_t *data, size_t size
+) {
+    char stackbuf[MAX_STACKBUF_SIZE] = "";
+
+    for (size_t i = 0; i<size; ++i) {
+        const char *code = telnet_uchar_to_printable(data[i]);
+
+        if (code == nullptr) {
+            code = telnet_uchar_to_string(data[i]);
+        }
+
+        if (code == nullptr) {
+            code = "NUL";
+            FUSE();
+        }
+
+        if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
+            LOG("%s: long TXT sequence (size %lu)", dst, size);
+
+            break;
+        }
+
+        strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
+
+        if (i + 1 < size) {
+            strncat(
+                stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
+            );
+        }
+    }
+
+    LOG("%s:txt -> %s: %s", src, dst, stackbuf);
+}
+
+static const char *log_get_esc_sequence_code(
+    const unsigned char *data, size_t size, size_t index
+) {
+    if (*data != TERMINAL_ESC || index >= size) {
+        return nullptr;
+    }
+
+    const char *code = telnet_uchar_to_printable(data[index]);
+
+    return code ? code : telnet_uchar_to_string(data[index]);
+}
+
+void log_esc(
+    const char *src, const char *dst, const uint8_t *data, size_t size
+) {
+    char stackbuf[MAX_STACKBUF_SIZE] = "";
+
+    for (size_t i = 0; i<size; ++i) {
+        const char *code = log_get_esc_sequence_code(data, size, i);
+
+        if (code == nullptr) {
+            code = "NUL";
+            FUSE();
+        }
+
+        if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
+            LOG("%s: long ESC sequence (size %lu)", dst, size);
+
+            break;
+        }
+
+        strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
+
+        if (i + 1 < size) {
+            strncat(
+                stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
+            );
+        }
+    }
+
+    LOG("%s:esc -> %s: %s", src, dst, stackbuf);
 }

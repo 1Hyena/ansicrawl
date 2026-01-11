@@ -37,9 +37,7 @@ static size_t client_get_esc_blocking_length(
 static size_t client_get_esc_nonblocking_length(
     const unsigned char *data, size_t length
 );
-static const char *client_get_esc_sequence_code(
-    const unsigned char *data, size_t size, size_t index
-);
+
 
 CLIENT *client_create() {
     CLIENT *client = mem_new_client();
@@ -118,38 +116,7 @@ static void client_handle_incoming_terminal_txt(
         return;
     }
 
-    {
-        char stackbuf[MAX_STACKBUF_SIZE] = "";
-
-        for (size_t i = 0; i<size; ++i) {
-            const char *code = telnet_uchar_to_printable(data[i]);
-
-            if (code == nullptr) {
-                code = telnet_uchar_to_string(data[i]);
-            }
-
-            if (code == nullptr) {
-                code = "NUL";
-                FUSE();
-            }
-
-            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
-                LOG("client: long TXT sequence (size %lu)", size);
-
-                break;
-            }
-
-            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
-
-            if (i + 1 < size) {
-                strncat(
-                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
-                );
-            }
-        }
-
-        LOG("terminal:txt -> client: %s", stackbuf);
-    }
+    log_txt("terminal", "client", data, size);
 
     bool handled = client_handle_incoming_terminal_txt_ctrl_key(
         client, data, size
@@ -168,34 +135,7 @@ static void client_handle_incoming_terminal_esc(
         return;
     }
 
-    {
-        char stackbuf[MAX_STACKBUF_SIZE] = "";
-
-        for (size_t i = 0; i<size; ++i) {
-            const char *code = client_get_esc_sequence_code(data, size, i);
-
-            if (code == nullptr) {
-                code = "NUL";
-                FUSE();
-            }
-
-            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
-                LOG("client: long ESC sequence (size %lu)", size);
-
-                break;
-            }
-
-            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
-
-            if (i + 1 < size) {
-                strncat(
-                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
-                );
-            }
-        }
-
-        LOG("terminal:esc -> client: %s", stackbuf);
-    }
+    log_esc("terminal", "client", data, size);
 
     bool handled = (
         client_handle_incoming_terminal_esc_atomic_key(client, data, size) ||
@@ -219,34 +159,7 @@ static void client_handle_incoming_terminal_iac(
         return;
     }
 
-    {
-        char stackbuf[MAX_STACKBUF_SIZE] = "";
-
-        for (size_t i = 0; i<size; ++i) {
-            const char *code = telnet_get_iac_sequence_code(data, size, i);
-
-            if (code == nullptr) {
-                code = "NUL";
-                FUSE();
-            }
-
-            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
-                LOG("client: long IAC sequence (size %lu)", size);
-
-                break;
-            }
-
-            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
-
-            if (i + 1 < size) {
-                strncat(
-                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
-                );
-            }
-        }
-
-        LOG("terminal:iac -> client: %s", stackbuf);
-    }
+    log_iac("terminal", "client", data, size);
 
     struct {
         bool (*write) (CLIENT *, const char *, size_t);
@@ -807,18 +720,6 @@ static size_t client_get_esc_nonblocking_length(
     const char *esc = memchr(data, TERMINAL_ESC, length);
 
     return esc ? SIZEVAL(esc - ((const char *) data)) : length;
-}
-
-static const char *client_get_esc_sequence_code(
-    const unsigned char *data, size_t size, size_t index
-) {
-    if (*data != TERMINAL_ESC || index >= size) {
-        return nullptr;
-    }
-
-    const char *code = telnet_uchar_to_printable(data[index]);
-
-    return code ? code : telnet_uchar_to_string(data[index]);
 }
 
 static bool client_handle_incoming_terminal_txt_ctrl_key(

@@ -48,9 +48,7 @@ static size_t terminal_get_esc_blocking_length(
 static size_t terminal_get_esc_nonblocking_length(
     const unsigned char *, size_t size
 );
-static const char *terminal_get_esc_sequence_code(
-    const unsigned char *data, size_t size, size_t index
-);
+
 
 TERMINAL *terminal_create() {
     TERMINAL *terminal = mem_new_terminal();
@@ -337,34 +335,7 @@ static void terminal_handle_incoming_client_iac(
         return;
     }
 
-    {
-        char stackbuf[MAX_STACKBUF_SIZE] = "";
-
-        for (size_t i = 0; i<size; ++i) {
-            const char *code = telnet_get_iac_sequence_code(data, size, i);
-
-            if (code == nullptr) {
-                code = "NUL";
-                FUSE();
-            }
-
-            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
-                LOG("terminal: long IAC sequence (size %lu)", size);
-
-                break;
-            }
-
-            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
-
-            if (i + 1 < size) {
-                strncat(
-                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
-                );
-            }
-        }
-
-        LOG("client:iac -> terminal: %s", stackbuf);
-    }
+    log_iac("client", "terminal", data, size);
 
     struct {
         bool (*write) (TERMINAL *, const char *, size_t);
@@ -483,34 +454,7 @@ static void terminal_handle_incoming_interface_esc(
         return;
     }
 
-    {
-        char stackbuf[MAX_STACKBUF_SIZE] = "";
-
-        for (size_t i = 0; i<size; ++i) {
-            const char *code = terminal_get_esc_sequence_code(data, size, i);
-
-            if (code == nullptr) {
-                code = "NUL";
-                FUSE();
-            }
-
-            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
-                LOG("terminal: long ESC sequence (size %lu)", size);
-
-                break;
-            }
-
-            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
-
-            if (i + 1 < size) {
-                strncat(
-                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
-                );
-            }
-        }
-
-        LOG("interface:esc -> terminal: %s", stackbuf);
-    }
+    log_esc("interface", "terminal", data, size);
 
     bool handled = terminal_handle_incoming_interface_esc_screen_size(
         terminal, data, size
@@ -531,38 +475,7 @@ static void terminal_handle_incoming_interface_txt(
         return;
     }
 
-    {
-        char stackbuf[MAX_STACKBUF_SIZE] = "";
-
-        for (size_t i = 0; i<size; ++i) {
-            const char *code = telnet_uchar_to_printable(data[i]);
-
-            if (code == nullptr) {
-                code = telnet_uchar_to_string(data[i]);
-            }
-
-            if (code == nullptr) {
-                code = "NUL";
-                FUSE();
-            }
-
-            if (strlen(stackbuf) + strlen(code) + 2 >= sizeof(stackbuf)) {
-                LOG("terminal: long TXT sequence (size %lu)", size);
-
-                break;
-            }
-
-            strncat(stackbuf, code, sizeof(stackbuf) - (strlen(stackbuf) + 1));
-
-            if (i + 1 < size) {
-                strncat(
-                    stackbuf, " ",  sizeof(stackbuf) - (strlen(stackbuf) + 1)
-                );
-            }
-        }
-
-        LOG("interface:txt -> terminal: %s", stackbuf);
-    }
+    log_txt("interface", "terminal", data, size);
 
     terminal_write_to_client(terminal, (const char *) data, size);
 }
@@ -946,16 +859,4 @@ static size_t terminal_get_esc_blocking_length(
     }
 
     return next == nullptr ? 0 : next == str ? 1 : SIZEVAL(next - str);
-}
-
-static const char *terminal_get_esc_sequence_code(
-    const unsigned char *data, size_t size, size_t index
-) {
-    if (*data != TERMINAL_ESC || index >= size) {
-        return nullptr;
-    }
-
-    const char *code = telnet_uchar_to_printable(data[index]);
-
-    return code ? code : telnet_uchar_to_string(data[index]);
 }

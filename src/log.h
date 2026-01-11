@@ -10,6 +10,15 @@ void log_wiznet(long flg, long flg_skip, int min_lvl, const char *string);
 void log_wiznetf(
     long flg, long flg_skip, int min_lvl, const char *fmt, ...
 ) __attribute__((format (printf, 4, 5)));
+void log_iac(
+    const char *src, const char *dst, const uint8_t *data, size_t size
+);
+void log_esc(
+    const char *src, const char *dst, const uint8_t *data, size_t size
+);
+void log_txt(
+    const char *src, const char *dst, const uint8_t *data, size_t size
+);
 
 void log_part   (const char *str, size_t len);
 void log_text   (const char *str);
