@@ -139,6 +139,14 @@ static const char TELNET_IAC_DO_BINARY[] = {
     (char) TELNET_IAC, (char) TELNET_DO, (char) TELNET_OPT_BINARY, 0
 };
 
+static const char TELNET_IAC_WILL_EOR[] = {
+    (char) TELNET_IAC, (char) TELNET_WILL, (char) TELNET_OPT_EOR, 0
+};
+
+static const char TELNET_IAC_DO_EOR[] = {
+    (char) TELNET_IAC, (char) TELNET_DO, (char) TELNET_OPT_EOR, 0
+};
+
 static const char TELNET_IAC_WONT_NAWS[] = {
     (char) TELNET_IAC, (char) TELNET_WONT, (char) TELNET_OPT_NAWS, 0
 };

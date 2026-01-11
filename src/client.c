@@ -81,6 +81,7 @@ void client_init(CLIENT *client) {
     client->telopt.terminal.sga.remote.wanted = true;
     client->telopt.terminal.bin.local.wanted = true;
     client->telopt.terminal.bin.remote.wanted = true;
+    client->telopt.terminal.eor.remote.wanted = true;
 
     client_write_to_terminal(client, TERMINAL_ESC_SAVE_CURSOR, 0);
     client_write_to_terminal(client, TERMINAL_ESC_SAVE_SCREEN, 0);
@@ -198,58 +199,50 @@ static void client_handle_incoming_terminal_iac(
             .write  = client_write_to_terminal,
             .opt    = &client->telopt.terminal.bin,
             .flags  = TELNET_FLAG_LOCAL|TELNET_FLAG_REMOTE
+        },
+        [TELNET_OPT_EOR] = {
+            .write  = client_write_to_terminal,
+            .opt    = &client->telopt.terminal.eor,
+            .flags  = TELNET_FLAG_REMOTE
         }
     };
 
-    switch (data[2]) {
-        case TELNET_OPT_NAWS: {
-            if (data[1] == TELNET_SB) {
-                if (!client->telopt.terminal.naws.remote.enabled) {
-                    break;
-                }
+    if (data[2] < ARRAY_LENGTH(opt_handlers) && opt_handlers[data[2]].opt) {
+        if (data[2] == TELNET_OPT_NAWS
+        &&  data[1] == TELNET_SB
+        &&  client->telopt.terminal.naws.remote.enabled) {
+            auto message = telnet_deserialize_naws_packet(data, size);
 
-                auto message = telnet_deserialize_naws_packet(data, size);
+            if (client->screen.width != message.width
+            ||  client->screen.height != message.height) {
+                client->screen.width = message.width;
+                client->screen.height = message.height;
+                client->bitset.reformat = true;
+            }
+        }
 
-                if (client->screen.width != message.width
-                ||  client->screen.height != message.height) {
-                    client->screen.width = message.width;
-                    client->screen.height = message.height;
-                    client->bitset.reformat = true;
-                }
+        auto handler = opt_handlers[data[2]];
+        auto response = telnet_opt_handle(
+            handler.opt, data[1], data[2], handler.flags
+        );
 
+        handler.write(client, (char *) response.data, response.size);
+    }
+    else {
+        switch (data[1]) {
+            case TELNET_DO: {
+                client_write_to_terminal(client, TELNET_IAC_WONT, 0);
+                client_write_to_terminal(client, (const char *) data+2, 1);
                 break;
             }
-        } [[fallthrough]];
-        case TELNET_OPT_ECHO:
-        case TELNET_OPT_SGA:
-        case TELNET_OPT_BINARY: {
-            auto handler = opt_handlers[data[2]];
-            auto response = telnet_opt_handle(
-                handler.opt, data[1], data[2], handler.flags
-            );
-
-            handler.write(client, (char *) response.data, response.size);
-
-            break;
-        }
-        default: {
-            switch (data[1]) {
-                case TELNET_DO: {
-                    client_write_to_terminal(client, TELNET_IAC_WONT, 0);
-                    client_write_to_terminal(client, (const char *) data+2, 1);
-                    break;
-                }
-                case TELNET_WILL: {
-                    client_write_to_terminal(client, TELNET_IAC_DONT, 0);
-                    client_write_to_terminal(client, (const char *) data+2, 1);
-                    break;
-                }
-                default: {
-                    break;
-                }
+            case TELNET_WILL: {
+                client_write_to_terminal(client, TELNET_IAC_DONT, 0);
+                client_write_to_terminal(client, (const char *) data+2, 1);
+                break;
             }
-
-            break;
+            default: {
+                break;
+            }
         }
     }
 }
@@ -386,6 +379,12 @@ static void client_update_terminal(CLIENT *client) {
     && !telnet_opt_remote_is_pending(client->telopt.terminal.bin)) {
         client_write_to_terminal(client, TELNET_IAC_DO_BINARY, 3);
         client->telopt.terminal.bin.remote.sent_do = true;
+    }
+
+    if (client->telopt.terminal.eor.remote.wanted
+    && !telnet_opt_remote_is_pending(client->telopt.terminal.eor)) {
+        client_write_to_terminal(client, TELNET_IAC_DO_EOR, 3);
+        client->telopt.terminal.eor.remote.sent_do = true;
     }
 }
 

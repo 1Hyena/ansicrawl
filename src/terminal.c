@@ -95,6 +95,7 @@ void terminal_init(TERMINAL *terminal) {
     terminal->telopt.client.naws.local.wanted = true;
     terminal->telopt.client.sga.local.wanted = true;
     terminal->telopt.client.sga.remote.wanted = true;
+    terminal->telopt.client.eor.local.wanted = true;
 
     terminal->state = TERMINAL_INIT_EDITOR;
 }
@@ -313,6 +314,12 @@ static void terminal_update_client(TERMINAL *terminal) {
         terminal_write_to_client(terminal, TELNET_IAC_DO_SGA, 0);
         terminal->telopt.client.sga.remote.sent_do = true;
     }
+
+    if (terminal->telopt.client.eor.local.wanted
+    && !telnet_opt_local_is_pending(terminal->telopt.client.eor)) {
+        terminal_write_to_client(terminal, TELNET_IAC_WILL_EOR, 0);
+        terminal->telopt.client.eor.local.sent_will = true;
+    }
 }
 
 static void terminal_handle_incoming_client_iac(
@@ -353,47 +360,43 @@ static void terminal_handle_incoming_client_iac(
             .write  = terminal_write_to_client,
             .opt    = &terminal->telopt.client.bin,
             .flags  = TELNET_FLAG_LOCAL|TELNET_FLAG_REMOTE
+        },
+        [TELNET_OPT_EOR] = {
+            .write  = terminal_write_to_client,
+            .opt    = &terminal->telopt.client.eor,
+            .flags  = TELNET_FLAG_LOCAL
         }
     };
 
     struct telnet_opt_handler_response_type response = {};
 
-    switch (data[2]) {
-        case TELNET_OPT_NAWS:
-        case TELNET_OPT_ECHO:
-        case TELNET_OPT_SGA:
-        case TELNET_OPT_BINARY: {
-            auto handler = opt_handlers[data[2]];
-            response = telnet_opt_handle(
-                handler.opt, data[1], data[2], handler.flags
-            );
+    if (data[2] < ARRAY_LENGTH(opt_handlers) && opt_handlers[data[2]].opt) {
+        auto handler = opt_handlers[data[2]];
+        response = telnet_opt_handle(
+            handler.opt, data[1], data[2], handler.flags
+        );
 
-            handler.write(terminal, (char *) response.data, response.size);
-
-            break;
-        }
-        default: {
-            switch (data[1]) {
-                case TELNET_DO: {
-                    terminal_write_to_client(terminal, TELNET_IAC_WONT, 0);
-                    terminal_write_to_client(
-                        terminal, (const char *) data+2, 1
-                    );
-                    break;
-                }
-                case TELNET_WILL: {
-                    terminal_write_to_client(terminal, TELNET_IAC_DONT, 0);
-                    terminal_write_to_client(
-                        terminal, (const char *) data+2, 1
-                    );
-                    break;
-                }
-                default: {
-                    break;
-                }
+        handler.write(terminal, (char *) response.data, response.size);
+    }
+    else {
+        switch (data[1]) {
+            case TELNET_DO: {
+                terminal_write_to_client(terminal, TELNET_IAC_WONT, 0);
+                terminal_write_to_client(
+                    terminal, (const char *) data+2, 1
+                );
+                break;
             }
-
-            break;
+            case TELNET_WILL: {
+                terminal_write_to_client(terminal, TELNET_IAC_DONT, 0);
+                terminal_write_to_client(
+                    terminal, (const char *) data+2, 1
+                );
+                break;
+            }
+            default: {
+                break;
+            }
         }
     }
 
