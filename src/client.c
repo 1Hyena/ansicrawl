@@ -23,6 +23,7 @@ static void client_handle_incoming_terminal_esc(
 static void client_handle_incoming_terminal_txt(
     CLIENT *, const uint8_t *data, size_t sz
 );
+static bool client_handle_incoming_terminal_key(CLIENT *, TERMINAL_KEY);
 static bool client_handle_incoming_terminal_txt_ctrl_key(
     CLIENT *, const uint8_t *data, size_t sz
 );
@@ -501,6 +502,62 @@ static bool client_flush_outgoing(CLIENT *client) {
     return false;
 }
 
+static bool client_handle_incoming_terminal_key(
+    CLIENT *client, TERMINAL_KEY key
+) {
+    switch (key) {
+        case TERMINAL_KEY_NONE: {
+            return false;
+        }
+        case TERMINAL_KEY_PGUP: {
+            LOG("user pressed PGUP");
+            break;
+        }
+        case TERMINAL_KEY_PGDN: {
+            LOG("user pressed PGDN");
+            break;
+        }
+        case TERMINAL_KEY_INS: {
+            LOG("user pressed INS");
+            break;
+        }
+        case TERMINAL_KEY_DEL: {
+            LOG("user pressed DEL");
+            break;
+        }
+        case TERMINAL_KEY_UP: {
+            LOG("user pressed UP");
+            break;
+        }
+        case TERMINAL_KEY_DOWN: {
+            LOG("user pressed DOWN");
+            break;
+        }
+        case TERMINAL_KEY_LEFT: {
+            LOG("user pressed LEFT");
+            break;
+        }
+        case TERMINAL_KEY_RIGHT: {
+            LOG("user pressed RIGHT");
+            break;
+        }
+        case TERMINAL_KEY_NOP: {
+            LOG("user pressed NOP");
+            break;
+        }
+        case TERMINAL_KEY_HOME: {
+            LOG("user pressed HOME");
+            break;
+        }
+        case TERMINAL_KEY_END: {
+            LOG("user pressed END");
+            break;
+        }
+    }
+
+    return true;
+}
+
 static struct client_incoming_terminal_esc_tilde_key_type{
     const char *end;
     const char *str;
@@ -569,34 +626,11 @@ static struct client_incoming_terminal_esc_tilde_key_type{
 static bool client_handle_incoming_terminal_esc_tilde_key(
     CLIENT *client, const uint8_t *data, size_t size
 ) {
-    const char *str = (const char *) data;
-    auto result = client_parse_incoming_terminal_esc_tilde_key(str, size);
-
-    if (result.key == TERMINAL_KEY_NONE) {
-        return false;
-    }
-
-    switch (result.key) {
-        case TERMINAL_KEY_PGUP: {
-            LOG("user pressed PGUP");
-            break;
-        }
-        case TERMINAL_KEY_PGDN: {
-            LOG("user pressed PGDN");
-            break;
-        }
-        case TERMINAL_KEY_INS: {
-            LOG("user pressed INS");
-            break;
-        }
-        case TERMINAL_KEY_DEL: {
-            LOG("user pressed DEL");
-            break;
-        }
-        default: break;
-    }
-
-    return true;
+    return client_handle_incoming_terminal_key(
+        client, client_parse_incoming_terminal_esc_tilde_key(
+            (const char *) data, size
+        ).key
+    );
 }
 
 static struct client_incoming_terminal_esc_atomic_key_type{
@@ -661,46 +695,11 @@ static struct client_incoming_terminal_esc_atomic_key_type{
 static bool client_handle_incoming_terminal_esc_atomic_key(
     CLIENT *client, const uint8_t *data, size_t size
 ) {
-    const char *str = (const char *) data;
-    auto result = client_parse_incoming_terminal_esc_atomic_key(str, size);
-
-    if (result.key == TERMINAL_KEY_NONE) {
-        return false;
-    }
-
-    switch (result.key) {
-        case TERMINAL_KEY_UP: {
-            LOG("user pressed UP");
-            break;
-        }
-        case TERMINAL_KEY_DOWN: {
-            LOG("user pressed DOWN");
-            break;
-        }
-        case TERMINAL_KEY_LEFT: {
-            LOG("user pressed LEFT");
-            break;
-        }
-        case TERMINAL_KEY_RIGHT: {
-            LOG("user pressed RIGHT");
-            break;
-        }
-        case TERMINAL_KEY_NOP: {
-            LOG("user pressed NOP");
-            break;
-        }
-        case TERMINAL_KEY_HOME: {
-            LOG("user pressed HOME");
-            break;
-        }
-        case TERMINAL_KEY_END: {
-            LOG("user pressed END");
-            break;
-        }
-        default: break;
-    }
-
-    return true;
+    return client_handle_incoming_terminal_key(
+        client, client_parse_incoming_terminal_esc_atomic_key(
+            (const char *) data, size
+        ).key
+    );
 }
 
 static size_t client_get_esc_blocking_length(
