@@ -20,6 +20,45 @@ static bool main_flush_outgoing();
 
 
 int main(int argc, char **argv) {
+/*
+    char img_data[2000];
+    struct amp_image_type amp = {
+        .width = 10,
+        .height = 10
+    };
+
+    size_t img_size = amp_init(&amp, img_data, sizeof(img_data));
+
+    LOG("img size: %lu", img_size);
+
+    for (uint32_t y = 0; y < amp.height; ++y) {
+        for (uint32_t x = 0; x < amp.width; ++x) {
+            amp_set_glyph(&amp, x, y, "ä");
+        }
+    }
+
+    struct amp_style_cell_type style = {
+        .bitset = {
+            .italic = true
+        }
+    };
+
+    amp_set_style(&amp, 5, 5, style);
+
+    char buf[256];
+
+    main_init(argc, argv);
+
+    for (uint32_t y=0; y<amp.height; ++y) {
+        size_t sz=amp_row_to_str(&amp, y, buf, sizeof(buf));
+        LOG("%s (%lu)", buf, sz);
+    }
+
+    main_deinit();
+
+    return EXIT_SUCCESS;
+*/
+
     main_init(argc, argv);
     main_loop();
     main_deinit();

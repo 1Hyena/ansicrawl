@@ -2,6 +2,7 @@
 #ifndef ALL_H_06_01_2026
 #define ALL_H_06_01_2026
 ////////////////////////////////////////////////////////////////////////////////
+#include "amp.h"
 #include "client.h"
 #include "clip.h"
 #include "dispatcher.h"
