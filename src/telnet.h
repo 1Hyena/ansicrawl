@@ -175,6 +175,10 @@ static const char TELNET_IAC_SE[] = {
     (char) TELNET_IAC, (char) TELNET_SE, 0
 };
 
+static const char TELNET_IAC_EOR[] = {
+    (char) TELNET_IAC, (char) TELNET_EOR, 0
+};
+
 bool telnet_opt_local_is_pending(struct telnet_opt_type);
 void telnet_opt_local_enable(struct telnet_opt_type *);
 void telnet_opt_local_disable(struct telnet_opt_type *);

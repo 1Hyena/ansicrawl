@@ -42,10 +42,10 @@ static bool terminal_handle_incoming_dispatcher_esc_screen_size(
     TERMINAL *terminal, const uint8_t *data, size_t size
 );
 static size_t terminal_get_esc_blocking_length(
-    const unsigned char *, size_t size
+    const uint8_t *, size_t size
 );
 static size_t terminal_get_esc_nonblocking_length(
-    const unsigned char *, size_t size
+    const uint8_t *, size_t size
 );
 
 
@@ -460,6 +460,10 @@ static void terminal_handle_incoming_dispatcher_esc(
     }
 
     terminal_write_to_client(terminal, (const char *) data, size);
+
+    if (terminal->telopt.client.eor.local.enabled) {
+        terminal_write_to_client(terminal, TELNET_IAC_EOR, 0);
+    }
 }
 
 static void terminal_handle_incoming_dispatcher_txt(
@@ -473,6 +477,10 @@ static void terminal_handle_incoming_dispatcher_txt(
     log_txt("dispatcher", "terminal", data, size);
 
     terminal_write_to_client(terminal, (const char *) data, size);
+
+    if (terminal->telopt.client.eor.local.enabled) {
+        terminal_write_to_client(terminal, TELNET_IAC_EOR, 0);
+    }
 }
 
 static bool terminal_read_from_dispatcher(TERMINAL *terminal) {
@@ -482,49 +490,74 @@ static bool terminal_read_from_dispatcher(TERMINAL *terminal) {
         return false;
     }
 
-    const unsigned char *data = clip_get_byte_array(clip);
-    const size_t size = clip_get_size(clip);
+    const uint8_t *data = clip_get_byte_array(clip);
+    const size_t data_size = clip_get_size(clip);
+    const size_t nonblocking_iac_sz = telnet_get_iac_nonblocking_length(
+        data, data_size
+    );
 
-    size_t nonblocking_sz = telnet_get_iac_nonblocking_length(data, size);
+    if (nonblocking_iac_sz) {
+        size_t nonblocking_esc_sz = terminal_get_esc_nonblocking_length(
+            data, nonblocking_iac_sz
+        );
 
-    if (nonblocking_sz) {
-        nonblocking_sz = terminal_get_esc_nonblocking_length(data, size);
-
-        if (nonblocking_sz) {
-            CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
-
-            terminal_handle_incoming_dispatcher_txt(
-                terminal,
-                clip_get_byte_array(nonblocking), clip_get_size(nonblocking)
+        if (!nonblocking_esc_sz) {
+            const size_t blocking_esc_sz = terminal_get_esc_blocking_length(
+                data, nonblocking_iac_sz
             );
 
-            clip_destroy(nonblocking);
+            if (blocking_esc_sz > 1
+            || (blocking_esc_sz == 1 && nonblocking_iac_sz == 1)) {
+                // Either an ESC sequence that needs to be handled or just a
+                // single escape key character.
 
-            return true;
+                CLIP *blocking = clip_shift(clip, blocking_esc_sz);
+
+                terminal_handle_incoming_dispatcher_esc(
+                    terminal,
+                    clip_get_byte_array(blocking), clip_get_size(blocking)
+                );
+
+                clip_destroy(blocking);
+
+                return true;
+            }
+            else if (nonblocking_iac_sz > 1) {
+                // This ESC character has something immediately following it but
+                // we did not recognize the sequence to be relevant for handling
+                // by the dispatcher. If this was a single escape key stroke,
+                // then it wouldn't have anything following it because the user
+                // would not be able to type so fast. Hence, we pass it on to
+                // the terminal as it is.
+
+                log_txt("dispatcher", "terminal", data, 1);
+                terminal_write_to_client(terminal, (const char *) data, 1);
+                clip_destroy(clip_shift(clip, 1));
+
+                return true;
+            }
+
+            nonblocking_esc_sz = nonblocking_iac_sz;
         }
 
-        size_t blocking_sz = terminal_get_esc_blocking_length(data, size);
+        CLIP *nonblocking = clip_shift(clip, nonblocking_esc_sz);
 
-        if (blocking_sz) {
-            CLIP *blocking = clip_shift(clip, blocking_sz);
+        terminal_handle_incoming_dispatcher_txt(
+            terminal,
+            clip_get_byte_array(nonblocking), clip_get_size(nonblocking)
+        );
 
-            terminal_handle_incoming_dispatcher_esc(
-                terminal,
-                clip_get_byte_array(blocking), clip_get_size(blocking)
-            );
+        clip_destroy(nonblocking);
 
-            clip_destroy(blocking);
-
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
-    size_t blocking_sz = telnet_get_iac_sequence_length(data, size);
+    const size_t blocking_iac_sz = telnet_get_iac_sequence_length(
+        data, data_size
+    );
 
-    if (blocking_sz) {
-        CLIP *blocking = clip_shift(clip, blocking_sz);
+    if (blocking_iac_sz) {
+        CLIP *blocking = clip_shift(clip, blocking_iac_sz);
 
         terminal_handle_incoming_dispatcher_iac(
             terminal, clip_get_byte_array(blocking), clip_get_size(blocking)
@@ -545,13 +578,14 @@ static bool terminal_read_from_client(TERMINAL *terminal) {
         return false;
     }
 
-    const unsigned char *data = clip_get_byte_array(clip);
-    const size_t size = clip_get_size(clip);
+    const uint8_t *data = clip_get_byte_array(clip);
+    const size_t data_size = clip_get_size(clip);
+    const size_t nonblocking_iac_sz = telnet_get_iac_nonblocking_length(
+        data, data_size
+    );
 
-    size_t nonblocking_sz = telnet_get_iac_nonblocking_length(data, size);
-
-    if (nonblocking_sz) {
-        CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
+    if (nonblocking_iac_sz) {
+        CLIP *nonblocking = clip_shift(clip, nonblocking_iac_sz);
 
         terminal_handle_incoming_client_txt(
             terminal, clip_get_byte_array(nonblocking),
@@ -563,10 +597,12 @@ static bool terminal_read_from_client(TERMINAL *terminal) {
         return true;
     }
 
-    size_t blocking_sz = telnet_get_iac_sequence_length(data, size);
+    const size_t blocking_iac_sz = telnet_get_iac_sequence_length(
+        data, data_size
+    );
 
-    if (blocking_sz) {
-        CLIP *blocking = clip_shift(clip, blocking_sz);
+    if (blocking_iac_sz) {
+        CLIP *blocking = clip_shift(clip, blocking_iac_sz);
 
         terminal_handle_incoming_client_iac(
             terminal, clip_get_byte_array(blocking), clip_get_size(blocking)
@@ -649,7 +685,7 @@ static bool terminal_flush_outgoing(TERMINAL *terminal) {
 }
 
 static size_t terminal_get_esc_nonblocking_length(
-    const unsigned char *data, size_t length
+    const uint8_t *data, size_t length
 ) {
     if (!data) {
         FUSE();
@@ -768,6 +804,10 @@ static bool terminal_handle_incoming_dispatcher_esc_screen_size(
     const char *str = (const char *) data;
     auto result = terminal_parse_incoming_dispatcher_esc_screen_size(str, size);
 
+    if (result.end == str) {
+        return false; // Sequence does not contain the screen size.
+    }
+
     if (result.end != str + size) {
         BUG("failed to get screen size");
         terminal_die(terminal);
@@ -787,7 +827,7 @@ static bool terminal_handle_incoming_dispatcher_esc_screen_size(
 }
 
 static size_t terminal_get_esc_blocking_length(
-    const unsigned char *data, size_t size
+    const uint8_t *data, size_t size
 ) {
     if (!data) {
         FUSE();

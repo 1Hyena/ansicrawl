@@ -33,10 +33,10 @@ static bool client_handle_incoming_terminal_esc_tilde_key(
     CLIENT *client, const uint8_t *data, size_t size
 );
 static size_t client_get_esc_blocking_length(
-    const unsigned char *data, size_t size
+    const uint8_t *data, size_t size
 );
 static size_t client_get_esc_nonblocking_length(
-    const unsigned char *data, size_t length
+    const uint8_t *data, size_t length
 );
 
 
@@ -169,11 +169,11 @@ static void client_handle_incoming_terminal_iac(
         return;
     }
 
+    log_iac("terminal", "client", data, size);
+
     if (size == 2) {
         return;
     }
-
-    log_iac("terminal", "client", data, size);
 
     struct {
         bool (*write) (CLIENT *, const char *, size_t);
@@ -395,49 +395,60 @@ static bool client_read_from_terminal(CLIENT *client) {
         return false;
     }
 
-    const unsigned char *data = clip_get_byte_array(clip);
-    const size_t size = clip_get_size(clip);
+    const uint8_t *data = clip_get_byte_array(clip);
+    const size_t data_size = clip_get_size(clip);
+    const size_t nonblocking_iac_sz = telnet_get_iac_nonblocking_length(
+        data, data_size
+    );
 
-    size_t nonblocking_sz = telnet_get_iac_nonblocking_length(data, size);
+    if (nonblocking_iac_sz) {
+        size_t nonblocking_esc_sz = client_get_esc_nonblocking_length(
+            data, nonblocking_iac_sz
+        );
 
-    if (nonblocking_sz) {
-        nonblocking_sz = client_get_esc_nonblocking_length(data, size);
-
-        if (nonblocking_sz) {
-            CLIP *nonblocking = clip_shift(clip, nonblocking_sz);
-
-            client_handle_incoming_terminal_txt(
-                client,
-                clip_get_byte_array(nonblocking), clip_get_size(nonblocking)
+        if (!nonblocking_esc_sz) {
+            const size_t blocking_esc_sz = client_get_esc_blocking_length(
+                data, nonblocking_iac_sz
             );
 
-            clip_destroy(nonblocking);
+            if (blocking_esc_sz) {
+                CLIP *blocking = clip_shift(clip, blocking_esc_sz);
 
-            return true;
+                client_handle_incoming_terminal_esc(
+                    client,
+                    clip_get_byte_array(blocking), clip_get_size(blocking)
+                );
+
+                clip_destroy(blocking);
+
+                return true;
+            }
+            else if (nonblocking_iac_sz == data_size) {
+                return false; // Incomplete ESC sequence at hand. Waiting more.
+            }
+
+            // At this point it is clear that we would remain blocking here
+            // indefinitely because what we are waiting for can never arrive.
+            nonblocking_esc_sz = nonblocking_iac_sz;
         }
 
-        size_t blocking_sz = client_get_esc_blocking_length(data, size);
+        CLIP *nonblocking = clip_shift(clip, nonblocking_esc_sz);
 
-        if (blocking_sz) {
-            CLIP *blocking = clip_shift(clip, blocking_sz);
+        client_handle_incoming_terminal_txt(
+            client, clip_get_byte_array(nonblocking), clip_get_size(nonblocking)
+        );
 
-            client_handle_incoming_terminal_esc(
-                client,
-                clip_get_byte_array(blocking), clip_get_size(blocking)
-            );
+        clip_destroy(nonblocking);
 
-            clip_destroy(blocking);
-
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
-    size_t blocking_sz = telnet_get_iac_sequence_length(data, size);
+    const size_t blocking_iac_sz = telnet_get_iac_sequence_length(
+        data, data_size
+    );
 
-    if (blocking_sz) {
-        CLIP *blocking = clip_shift(clip, blocking_sz);
+    if (blocking_iac_sz) {
+        CLIP *blocking = clip_shift(clip, blocking_iac_sz);
 
         client_handle_incoming_terminal_iac(
             client, clip_get_byte_array(blocking), clip_get_size(blocking)
@@ -693,7 +704,7 @@ static bool client_handle_incoming_terminal_esc_atomic_key(
 }
 
 static size_t client_get_esc_blocking_length(
-    const unsigned char *data, size_t size
+    const uint8_t *data, size_t size
 ) {
     if (!data) {
         FUSE();
@@ -719,7 +730,7 @@ static size_t client_get_esc_blocking_length(
 }
 
 static size_t client_get_esc_nonblocking_length(
-    const unsigned char *data, size_t length
+    const uint8_t *data, size_t length
 ) {
     if (!data) {
         FUSE();
