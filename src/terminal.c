@@ -525,10 +525,10 @@ static bool terminal_read_from_dispatcher(TERMINAL *terminal) {
             else if (nonblocking_iac_sz > 1) {
                 // This ESC character has something immediately following it but
                 // we did not recognize the sequence to be relevant for handling
-                // by the dispatcher. If this was a single escape key stroke,
-                // then it wouldn't have anything following it because the user
-                // would not be able to type so fast. Hence, we pass it on to
-                // the terminal as it is.
+                // by the terminal. If this was a single escape key stroke, then
+                // it wouldn't have anything following it because the user would
+                // not be able to type so fast. Hence, we pass it on to the
+                // client as it is.
 
                 log_txt("dispatcher", "terminal", data, 1);
                 terminal_write_to_client(terminal, (const char *) data, 1);
