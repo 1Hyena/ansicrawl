@@ -64,6 +64,14 @@ static inline size_t                    amp_row_to_ans(
     char *                                  ans_dst,
     size_t                                  ans_dst_size
 );
+static inline size_t                    amp_row_cut_to_ans(
+    const struct amp_type *                 amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    uint32_t                                width,
+    char *                                  ans_dst,
+    size_t                                  ans_dst_size
+);
 static inline size_t                    amp_glyph_row_to_str(
     const struct amp_type *                 amp,
     uint32_t                                y,
@@ -131,7 +139,10 @@ struct amp_style_type {
         bool underline:1;
         bool blinking:1;
         bool strikethrough:1;
+
+        // not serialized:
         bool broken:1;
+        bool reset:1;
     } bitset;
 };
 
@@ -156,6 +167,12 @@ static inline size_t                    amp_style_to_ans(
     char *                                  ans_dst,
     size_t                                  ans_dst_size
 );
+static inline size_t                    amp_style_update_to_ans(
+    struct amp_style_type                   prev_style,
+    struct amp_style_type                   next_style,
+    char *                                  ans_dst,
+    size_t                                  ans_dst_size
+);
 static inline struct amp_style_type     amp_style_cell_deserialize(
     const uint8_t *                         src,
     size_t                                  src_size
@@ -177,10 +194,10 @@ static inline size_t                    amp_str_append(
 ////////////////////////////////////////////////////////////////////////////////
 
 static inline size_t amp_init(
-    struct amp_type *img, void *buf, size_t buf_size
+    struct amp_type *amp, void *buf, size_t buf_size
 ) {
     const size_t bytes_required = (
-        AMP_CELL_SIZE * img->width * img->height
+        AMP_CELL_SIZE * amp->width * amp->height
     );
     const size_t cell_count = (
         (buf_size < bytes_required ? buf_size : bytes_required) /
@@ -189,30 +206,30 @@ static inline size_t amp_init(
     const size_t glyph_size = cell_count * AMP_CELL_GLYPH_SIZE;
     const size_t style_size = cell_count * AMP_CELL_STYLE_SIZE;
 
-    img->glyph.data = (uint8_t *) buf;
-    img->glyph.size = glyph_size;
+    amp->glyph.data = (uint8_t *) buf;
+    amp->glyph.size = glyph_size;
 
-    img->style.data = (uint8_t *) buf + img->glyph.size;
-    img->style.size = style_size;
+    amp->style.data = (uint8_t *) buf + amp->glyph.size;
+    amp->style.size = style_size;
 
-    amp_clear(img);
+    amp_clear(amp);
 
     return bytes_required;
 }
 
-static inline void amp_clear(struct amp_type *img) {
-    memset(img->glyph.data, 0, img->glyph.size);
-    memset(img->style.data, 0, img->style.size);
+static inline void amp_clear(struct amp_type *amp) {
+    memset(amp->glyph.data, 0, amp->glyph.size);
+    memset(amp->style.data, 0, amp->style.size);
 }
 
 static inline ssize_t amp_get_cell_index(
-    const struct amp_type *img, long x, long y
+    const struct amp_type *amp, long x, long y
 ) {
-    if (x < 0 || y < 0 || x >= img->width || y >= img->height) {
+    if (x < 0 || y < 0 || x >= amp->width || y >= amp->height) {
         return -1;
     }
 
-    return (y * img->width + x);
+    return (y * amp->width + x);
 }
 
 static inline int amp_utf8_code_point_size(const char *str, size_t n) {
@@ -257,15 +274,15 @@ static inline int amp_utf8_code_point_size(const char *str, size_t n) {
 }
 
 static inline const char *amp_set_glyph(
-    struct amp_type *img, uint32_t x, uint32_t y, const char *glyph
+    struct amp_type *amp, uint32_t x, uint32_t y, const char *glyph
 ) {
-    ssize_t cell_index = amp_get_cell_index(img, x, y);
+    ssize_t cell_index = amp_get_cell_index(amp, x, y);
 
     if (cell_index < 0) {
         return nullptr;
     }
 
-    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= img->glyph.size) {
+    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= amp->glyph.size) {
         return nullptr;
     }
 
@@ -296,7 +313,7 @@ static inline const char *amp_set_glyph(
     }
 
     char *dst = (char *) (
-        img->glyph.data + (size_t) cell_index * AMP_CELL_GLYPH_SIZE
+        amp->glyph.data + (size_t) cell_index * AMP_CELL_GLYPH_SIZE
     );
 
     memcpy(dst, data, glyph_length + 1);
@@ -305,74 +322,74 @@ static inline const char *amp_set_glyph(
 }
 
 static inline bool amp_set_style(
-    struct amp_type *img, uint32_t x, uint32_t y,
+    struct amp_type *amp, uint32_t x, uint32_t y,
     struct amp_style_type style
 ) {
-    ssize_t cell_index = amp_get_cell_index(img, x, y);
+    ssize_t cell_index = amp_get_cell_index(amp, x, y);
 
     if (cell_index < 0) {
         return false;
     }
 
-    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= img->style.size) {
+    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= amp->style.size) {
         return false;
     }
 
     return amp_style_cell_serialize(
-        style, img->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
+        style, amp->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
         AMP_CELL_STYLE_SIZE
     );
 }
 
 static inline const char *amp_get_glyph(
-    const struct amp_type *img, uint32_t x, uint32_t y
+    const struct amp_type *amp, uint32_t x, uint32_t y
 ) {
-    ssize_t cell_index = amp_get_cell_index(img, x, y);
+    ssize_t cell_index = amp_get_cell_index(amp, x, y);
 
     if (cell_index < 0) {
         return nullptr;
     }
 
-    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= img->glyph.size) {
+    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= amp->glyph.size) {
         return nullptr;
     }
 
     return (
-        (const char *) img->glyph.data +
+        (const char *) amp->glyph.data +
         (size_t) cell_index * AMP_CELL_GLYPH_SIZE
     );
 }
 
 static inline struct amp_style_type amp_get_style(
-    const struct amp_type *img, uint32_t x, uint32_t y
+    const struct amp_type *amp, uint32_t x, uint32_t y
 ) {
     static const struct amp_style_type broken_cell = {
         .bitset = { .broken = true }
     };
 
-    ssize_t cell_index = amp_get_cell_index(img, x, y);
+    ssize_t cell_index = amp_get_cell_index(amp, x, y);
 
     if (cell_index < 0) {
         return broken_cell;
     }
 
-    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= img->style.size) {
+    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= amp->style.size) {
         return broken_cell;
     }
 
     return amp_style_cell_deserialize(
-        img->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
+        amp->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
         AMP_CELL_STYLE_SIZE
     );
 }
 
 static inline size_t amp_glyph_row_to_str(
-    const struct amp_type *img, uint32_t y, char *str_dst, size_t str_dst_size
+    const struct amp_type *amp, uint32_t y, char *str_dst, size_t str_dst_size
 ) {
     size_t str_size = 0;
 
-    for (uint32_t x = 0, w = img->width; x < w; ++x) {
-        const char *glyph_str = amp_get_glyph(img, x, y);
+    for (uint32_t x = 0, w = amp->width; x < w; ++x) {
+        const char *glyph_str = amp_get_glyph(amp, x, y);
 
         if (!glyph_str || *glyph_str == '\0') {
             str_size += amp_str_append(
@@ -387,8 +404,8 @@ static inline size_t amp_glyph_row_to_str(
         );
     }
 
-    if (str_size < str_dst_size) {
-        str_dst[str_size] = '\0';
+    if (!str_size && str_dst_size) {
+        *str_dst = '\0';
     }
 
     return (
@@ -420,26 +437,309 @@ static inline size_t amp_str_append(
 static inline size_t amp_style_to_ans(
     struct amp_style_type style, char *ans_dst, size_t ans_dst_size
 ) {
+    char ans[256];
+    size_t ans_size = 0;
+
+    if (style.bitset.reset) {
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "0"
+        );
+    }
+
+    if (style.bitset.hidden) {
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "8"
+        );
+    }
+
+    if (style.bitset.faint) {
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "2"
+        );
+    }
+
     if (style.bitset.italic) {
-        return amp_str_append(ans_dst, ans_dst_size, "\x1b[3m");
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "3"
+        );
+    }
+
+    if (style.bitset.underline) {
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "4"
+        );
+    }
+
+    if (style.bitset.blinking) {
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "5"
+        );
+    }
+
+    if (style.bitset.strikethrough) {
+        ans_size += (
+            ans_size ? amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+            ) : 0
+        );
+
+        ans_size += amp_str_append(
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "9"
+        );
+    }
+
+    if (ans_size) {
+        size_t written = 0;
+
+        written += amp_str_append(
+            ans_dst + written, amp_sub_size(ans_dst_size, written), "\x1b["
+        );
+
+        written += amp_str_append(
+            ans_dst + written, amp_sub_size(ans_dst_size, written), ans
+        );
+
+        written += amp_str_append(
+            ans_dst + written, amp_sub_size(ans_dst_size, written), "m"
+        );
+
+        return written;
+    }
+    else if (ans_dst_size) {
+        *ans_dst = '\0';
     }
 
     return 0;
 }
 
-static inline size_t amp_row_to_ans(
-    const struct amp_type *img, uint32_t y, char *ans_dst, size_t ans_dst_size
+static inline size_t amp_style_update_to_ans(
+    struct amp_style_type prev, struct amp_style_type next,
+    char *ans_dst, size_t ans_dst_size
 ) {
-    char style_ans[256];
-    struct amp_style_type style_state = {};
+    if ((prev.bitset.hidden         && !next.bitset.hidden)
+    ||  (prev.bitset.faint          && !next.bitset.faint)
+    ||  (prev.bitset.italic         && !next.bitset.italic)
+    ||  (prev.bitset.underline      && !next.bitset.underline)
+    ||  (prev.bitset.blinking       && !next.bitset.blinking)
+    ||  (prev.bitset.strikethrough  && !next.bitset.strikethrough)) {
+        struct amp_style_type style = next;
+
+        style.bitset.reset = true;
+
+        return amp_style_to_ans(style, ans_dst, ans_dst_size);
+    }
+
+    char buf[256];
+    char ans[256];
     size_t ans_size = 0;
 
-    for (uint32_t x = 0, w = img->width; x < w; ++x) {
-        style_state = amp_get_style(img, x, y);
-
-        size_t style_ans_size = amp_style_to_ans(
-            style_state, style_ans, sizeof(style_ans)
+    if (!prev.bitset.hidden && next.bitset.hidden) {
+        size_t buf_size = amp_style_to_ans(
+            (struct amp_style_type) { .bitset = { .hidden = true } },
+            buf, sizeof(buf)
         );
+
+        if (buf_size > 3 && buf_size < sizeof(buf)) {
+            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
+            );
+        }
+    }
+
+    if (!prev.bitset.faint && next.bitset.faint) {
+        size_t buf_size = amp_style_to_ans(
+            (struct amp_style_type) { .bitset = { .faint = true } },
+            buf, sizeof(buf)
+        );
+
+        if (buf_size > 3 && buf_size < sizeof(buf)) {
+            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
+            );
+        }
+    }
+
+    if (!prev.bitset.italic && next.bitset.italic) {
+        size_t buf_size = amp_style_to_ans(
+            (struct amp_style_type) { .bitset = { .italic = true } },
+            buf, sizeof(buf)
+        );
+
+        if (buf_size > 3 && buf_size < sizeof(buf)) {
+            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
+            );
+        }
+    }
+
+    if (!prev.bitset.underline && next.bitset.underline) {
+        size_t buf_size = amp_style_to_ans(
+            (struct amp_style_type) { .bitset = { .underline = true } },
+            buf, sizeof(buf)
+        );
+
+        if (buf_size > 3 && buf_size < sizeof(buf)) {
+            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
+            );
+        }
+    }
+
+    if (!prev.bitset.blinking && next.bitset.blinking) {
+        size_t buf_size = amp_style_to_ans(
+            (struct amp_style_type) { .bitset = { .blinking = true } },
+            buf, sizeof(buf)
+        );
+
+        if (buf_size > 3 && buf_size < sizeof(buf)) {
+            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
+            );
+        }
+    }
+
+    if (!prev.bitset.strikethrough && next.bitset.strikethrough) {
+        size_t buf_size = amp_style_to_ans(
+            (struct amp_style_type) { .bitset = { .strikethrough = true } },
+            buf, sizeof(buf)
+        );
+
+        if (buf_size > 3 && buf_size < sizeof(buf)) {
+            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
+            );
+        }
+    }
+
+    if (ans_size) {
+        size_t written = 0;
+
+        written += amp_str_append(
+            ans_dst + written, amp_sub_size(ans_dst_size, written), "\x1b["
+        );
+
+        written += amp_str_append(
+            ans_dst + written, amp_sub_size(ans_dst_size, written), ans
+        );
+
+        written += amp_str_append(
+            ans_dst + written, amp_sub_size(ans_dst_size, written), "m"
+        );
+
+        return written;
+    }
+    else if (ans_dst_size) {
+        *ans_dst = '\0';
+    }
+
+    return 0;
+}
+
+static inline size_t amp_row_cut_to_ans(
+    const struct amp_type *amp, uint32_t x, uint32_t y, uint32_t width,
+    char *ans_dst, size_t ans_dst_size
+) {
+    const uint32_t amp_width = amp->width;
+    const uint32_t end_x = (
+        width ? (x + width > amp_width ? amp_width : x + width) : amp_width
+    );
+
+    char style_ans[256];
+    struct amp_style_type prev_style_state = {};
+    size_t ans_size = 0;
+
+    for (; x < end_x; ++x) {
+        struct amp_style_type next_style_state = amp_get_style(amp, x, y);
+
+        size_t style_ans_size = amp_style_update_to_ans(
+            prev_style_state, next_style_state, style_ans, sizeof(style_ans)
+        );
+
+        prev_style_state = next_style_state;
 
         if (style_ans_size) {
             ans_size += amp_str_append(
@@ -447,9 +747,8 @@ static inline size_t amp_row_to_ans(
                 style_ans
             );
         }
-        else ans_size += style_ans_size;
 
-        const char *glyph_str = amp_get_glyph(img, x, y);
+        const char *glyph_str = amp_get_glyph(amp, x, y);
 
         if (!glyph_str || *glyph_str == '\0') {
             ans_size += amp_str_append(
@@ -468,8 +767,8 @@ static inline size_t amp_row_to_ans(
         ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size), "\x1b[0m"
     );
 
-    if (ans_size < ans_dst_size) {
-        ans_dst[ans_size] = '\0';
+    if (!ans_size && ans_dst_size) {
+        *ans_dst = '\0';
     }
 
     return (
@@ -477,6 +776,17 @@ static inline size_t amp_row_to_ans(
         // ans_dst_size had been sufficiently large, not counting the
         // terminating null character.
         ans_size
+    );
+}
+
+static inline size_t amp_row_to_ans(
+    const struct amp_type *amp, uint32_t y, char *ans_dst, size_t ans_dst_size
+) {
+    return (
+        // The number of characters that would have been written if
+        // ans_dst_size had been sufficiently large, not counting the
+        // terminating null character.
+        amp_row_cut_to_ans(amp, 0, y, amp->width, ans_dst, ans_dst_size)
     );
 }
 
@@ -502,8 +812,8 @@ static inline size_t amp_to_ans(
         }
     }
 
-    if (ans_size < ans_dst_size) {
-        ans_dst[ans_size] = '\0';
+    if (!ans_size && ans_dst_size) {
+        *ans_dst = '\0';
     }
 
     return ans_size;
@@ -524,14 +834,14 @@ static inline struct amp_style_type amp_style_cell_deserialize(
             .b = data_size > 5 ? data[5] : 0
         },
         .bitset = {
-            .fg             = data_size > 6 ? data[6] && (1 << 0) : 0,
-            .bg             = data_size > 6 ? data[6] && (1 << 1) : 0,
-            .hidden         = data_size > 6 ? data[6] && (1 << 2) : 0,
-            .faint          = data_size > 6 ? data[6] && (1 << 3) : 0,
-            .italic         = data_size > 6 ? data[6] && (1 << 4) : 0,
-            .underline      = data_size > 6 ? data[6] && (1 << 5) : 0,
-            .blinking       = data_size > 6 ? data[6] && (1 << 6) : 0,
-            .strikethrough  = data_size > 6 ? data[6] && (1 << 7) : 0,
+            .fg             = data_size > 6 ? data[6] & (1 << 0) : 0,
+            .bg             = data_size > 6 ? data[6] & (1 << 1) : 0,
+            .hidden         = data_size > 6 ? data[6] & (1 << 2) : 0,
+            .faint          = data_size > 6 ? data[6] & (1 << 3) : 0,
+            .italic         = data_size > 6 ? data[6] & (1 << 4) : 0,
+            .underline      = data_size > 6 ? data[6] & (1 << 5) : 0,
+            .blinking       = data_size > 6 ? data[6] & (1 << 6) : 0,
+            .strikethrough  = data_size > 6 ? data[6] & (1 << 7) : 0,
             .broken         = data_size < AMP_CELL_STYLE_SIZE
         }
     };

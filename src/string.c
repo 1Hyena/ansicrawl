@@ -8,6 +8,22 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
+void str_erase(char *str, char c) {
+    char *keep = str;
+
+    for (; *str; str++) {
+        if (*str == c) {
+            continue;
+        }
+
+        *keep++ = *str;
+    }
+
+    *keep = '\0';
+
+    return;
+}
+
 bool str_seg_to_long(const char *str, size_t str_sz, long *result) {
     char buf[64] = {};
     size_t i = 0;

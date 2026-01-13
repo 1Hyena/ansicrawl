@@ -5,6 +5,7 @@
 #include <stdarg.h>
 ////////////////////////////////////////////////////////////////////////////////
 
+void str_erase(char *str, char c);
 bool str_seg_to_long(const char *str, size_t str_sz, long *i);
 bool str_to_long(char const *s, long *i);
 size_t str_hash(const char *);
