@@ -440,7 +440,23 @@ static inline size_t amp_style_to_ans(
     char ans[256];
     size_t ans_size = 0;
 
-    if (style.bitset.reset) {
+    const char *options[] = {
+        style.bitset.reset          ? "0" : nullptr,
+        style.bitset.hidden         ? "8" : nullptr,
+        style.bitset.faint          ? "2" : nullptr,
+        style.bitset.italic         ? "3" : nullptr,
+        style.bitset.underline      ? "4" : nullptr,
+        style.bitset.blinking       ? "5" : nullptr,
+        style.bitset.strikethrough  ? "9" : nullptr
+    };
+
+    for (size_t i=0; i<sizeof(options)/sizeof(options[0]); ++i) {
+        const char *value = options[i];
+
+        if (!value) {
+            continue;
+        }
+
         ans_size += (
             ans_size ? amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
@@ -448,79 +464,7 @@ static inline size_t amp_style_to_ans(
         );
 
         ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "0"
-        );
-    }
-
-    if (style.bitset.hidden) {
-        ans_size += (
-            ans_size ? amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-            ) : 0
-        );
-
-        ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "8"
-        );
-    }
-
-    if (style.bitset.faint) {
-        ans_size += (
-            ans_size ? amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-            ) : 0
-        );
-
-        ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "2"
-        );
-    }
-
-    if (style.bitset.italic) {
-        ans_size += (
-            ans_size ? amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-            ) : 0
-        );
-
-        ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "3"
-        );
-    }
-
-    if (style.bitset.underline) {
-        ans_size += (
-            ans_size ? amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-            ) : 0
-        );
-
-        ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "4"
-        );
-    }
-
-    if (style.bitset.blinking) {
-        ans_size += (
-            ans_size ? amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-            ) : 0
-        );
-
-        ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "5"
-        );
-    }
-
-    if (style.bitset.strikethrough) {
-        ans_size += (
-            ans_size ? amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-            ) : 0
-        );
-
-        ans_size += amp_str_append(
-            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "9"
+            ans + ans_size, amp_sub_size(sizeof(ans), ans_size), value
         );
     }
 
@@ -569,116 +513,53 @@ static inline size_t amp_style_update_to_ans(
     char ans[256];
     size_t ans_size = 0;
 
-    if (!prev.bitset.hidden && next.bitset.hidden) {
-        size_t buf_size = amp_style_to_ans(
-            (struct amp_style_type) { .bitset = { .hidden = true } },
-            buf, sizeof(buf)
-        );
-
-        if (buf_size > 3 && buf_size < sizeof(buf)) {
-            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
-
-            ans_size += (
-                ans_size ? amp_str_append(
-                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-                ) : 0
-            );
-
-            ans_size += amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
-            );
+    const struct amp_style_type styles[] = {
+        {
+            .bitset = {
+                .hidden = (
+                    !prev.bitset.hidden && next.bitset.hidden
+                )
+            }
+        },
+        {
+            .bitset = {
+                .faint = (
+                    !prev.bitset.faint && next.bitset.faint
+                )
+            }
+        },
+        {
+            .bitset = {
+                .italic = (
+                    !prev.bitset.italic && next.bitset.italic
+                )
+            }
+        },
+        {
+            .bitset = {
+                .underline = (
+                    !prev.bitset.underline && next.bitset.underline
+                )
+            }
+        },
+        {
+            .bitset = {
+                .blinking = (
+                    !prev.bitset.blinking && next.bitset.blinking
+                )
+            }
+        },
+        {
+            .bitset = {
+                .strikethrough = (
+                    !prev.bitset.strikethrough && next.bitset.strikethrough
+                )
+            }
         }
-    }
+    };
 
-    if (!prev.bitset.faint && next.bitset.faint) {
-        size_t buf_size = amp_style_to_ans(
-            (struct amp_style_type) { .bitset = { .faint = true } },
-            buf, sizeof(buf)
-        );
-
-        if (buf_size > 3 && buf_size < sizeof(buf)) {
-            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
-
-            ans_size += (
-                ans_size ? amp_str_append(
-                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-                ) : 0
-            );
-
-            ans_size += amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
-            );
-        }
-    }
-
-    if (!prev.bitset.italic && next.bitset.italic) {
-        size_t buf_size = amp_style_to_ans(
-            (struct amp_style_type) { .bitset = { .italic = true } },
-            buf, sizeof(buf)
-        );
-
-        if (buf_size > 3 && buf_size < sizeof(buf)) {
-            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
-
-            ans_size += (
-                ans_size ? amp_str_append(
-                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-                ) : 0
-            );
-
-            ans_size += amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
-            );
-        }
-    }
-
-    if (!prev.bitset.underline && next.bitset.underline) {
-        size_t buf_size = amp_style_to_ans(
-            (struct amp_style_type) { .bitset = { .underline = true } },
-            buf, sizeof(buf)
-        );
-
-        if (buf_size > 3 && buf_size < sizeof(buf)) {
-            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
-
-            ans_size += (
-                ans_size ? amp_str_append(
-                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-                ) : 0
-            );
-
-            ans_size += amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
-            );
-        }
-    }
-
-    if (!prev.bitset.blinking && next.bitset.blinking) {
-        size_t buf_size = amp_style_to_ans(
-            (struct amp_style_type) { .bitset = { .blinking = true } },
-            buf, sizeof(buf)
-        );
-
-        if (buf_size > 3 && buf_size < sizeof(buf)) {
-            buf[buf_size - 1] = '\0'; // delete the 'm' terminator
-
-            ans_size += (
-                ans_size ? amp_str_append(
-                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
-                ) : 0
-            );
-
-            ans_size += amp_str_append(
-                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), buf + 2
-            );
-        }
-    }
-
-    if (!prev.bitset.strikethrough && next.bitset.strikethrough) {
-        size_t buf_size = amp_style_to_ans(
-            (struct amp_style_type) { .bitset = { .strikethrough = true } },
-            buf, sizeof(buf)
-        );
+    for (size_t i=0; i<sizeof(styles)/sizeof(styles[0]); ++i) {
+        size_t buf_size = amp_style_to_ans(styles[i], buf, sizeof(buf));
 
         if (buf_size > 3 && buf_size < sizeof(buf)) {
             buf[buf_size - 1] = '\0'; // delete the 'm' terminator
