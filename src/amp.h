@@ -31,6 +31,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <stdckdint.h>
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -51,6 +52,11 @@ static inline size_t                    amp_init(
 );
 static inline void                      amp_clear(
     struct amp_type *                       amp
+);
+static inline size_t                    amp_to_ans(
+    const struct amp_type *                 amp,
+    char *                                  ans_dst,
+    size_t                                  ans_dst_size
 );
 static inline size_t                    amp_row_to_ans(
     const struct amp_type *                 amp,
@@ -143,12 +149,12 @@ static inline ssize_t                   amp_get_cell_index(
 );
 static inline int                       amp_utf8_code_point_size(
     const char *                            utf8_str,
-    size_t                                  utf8_str_sz
+    size_t                                  utf8_str_size
 );
 static inline size_t                    amp_style_to_ans(
     struct amp_style_type                   style,
     char *                                  ans_dst,
-    size_t                                  ans_dst_sz
+    size_t                                  ans_dst_size
 );
 static inline struct amp_style_type     amp_style_cell_deserialize(
     const uint8_t *                         src,
@@ -158,6 +164,15 @@ static inline bool                      amp_style_cell_serialize(
     struct amp_style_type                   style,
     uint8_t *                               dst,
     size_t                                  dst_size
+);
+static inline size_t                    amp_sub_size(
+    size_t                                  a,
+    size_t                                  b
+);
+static inline size_t                    amp_str_append(
+    char *                                  str_dst,
+    size_t                                  str_dst_size,
+    const char *                            str_src
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -352,114 +367,146 @@ static inline struct amp_style_type amp_get_style(
 }
 
 static inline size_t amp_glyph_row_to_str(
-    const struct amp_type *img, uint32_t y, char *dst, size_t dst_sz
+    const struct amp_type *img, uint32_t y, char *str_dst, size_t str_dst_size
 ) {
-    size_t str_sz = 0;
+    size_t str_size = 0;
 
     for (uint32_t x = 0, w = img->width; x < w; ++x) {
-        const char *glyph = amp_get_glyph(img, x, y);
+        const char *glyph_str = amp_get_glyph(img, x, y);
 
-        if (!glyph || *glyph == '\0') {
-            if (str_sz + 1 < dst_sz) {
-                dst[str_sz] = ' ';
-            }
+        if (!glyph_str || *glyph_str == '\0') {
+            str_size += amp_str_append(
+                str_dst + str_size, amp_sub_size(str_dst_size, str_size), " "
+            );
 
-            ++str_sz;
             continue;
         }
 
-        size_t gsz = strlen(glyph);
-
-        if (str_sz + gsz < dst_sz) {
-            memcpy(dst + str_sz, glyph, gsz);
-        }
-
-        str_sz += gsz;
+        str_size += amp_str_append(
+            str_dst + str_size, amp_sub_size(str_dst_size, str_size), glyph_str
+        );
     }
 
-    if (str_sz < dst_sz) {
-        dst[str_sz] = '\0';
-    }
-    else if (dst_sz) {
-        dst[dst_sz - 1] = '\0';
+    if (str_size < str_dst_size) {
+        str_dst[str_size] = '\0';
     }
 
-    return ++str_sz;
+    return (
+        // The number of characters that would have been written if
+        // str_dst_size had been sufficiently large, not counting the
+        // terminating null character.
+        str_size
+    );
+}
+
+static inline size_t amp_str_append(
+    char *str_dst, size_t str_dst_size, const char *str_src
+) {
+    int ret = snprintf(str_dst, str_dst_size, "%s", str_src);
+
+    if (str_dst_size
+    && (ret < 0 || (size_t) ret >= str_dst_size)) {
+        *str_dst = '\0'; // If it did not fit, sets *str_dst to zero.
+    }
+
+    return (
+        // The number of characters that would have been written if
+        // str_dst_size had been sufficiently large, not counting the
+        // terminating null character.
+        ret >= 0 ? (size_t) ret : 0
+    );
 }
 
 static inline size_t amp_style_to_ans(
-    struct amp_style_type style, char *dst, size_t dst_sz
+    struct amp_style_type style, char *ans_dst, size_t ans_dst_size
 ) {
     if (style.bitset.italic) {
-        int ret = snprintf(dst, dst_sz, "%s", "\x1b[3m");
-
-        if (ret < 0 || (size_t) ret >= dst_sz) {
-            return 0;
-        }
-
-        return (size_t) ret;
+        return amp_str_append(ans_dst, ans_dst_size, "\x1b[3m");
     }
 
     return 0;
 }
 
 static inline size_t amp_row_to_ans(
-    const struct amp_type *img, uint32_t y, char *dst, size_t dst_sz
+    const struct amp_type *img, uint32_t y, char *ans_dst, size_t ans_dst_size
 ) {
-    char style_str[256];
+    char style_ans[256];
     struct amp_style_type style_state = {};
-    size_t str_sz = 0;
+    size_t ans_size = 0;
 
     for (uint32_t x = 0, w = img->width; x < w; ++x) {
         style_state = amp_get_style(img, x, y);
 
-        size_t size = amp_style_to_ans(
-            style_state, style_str, sizeof(style_str)
+        size_t style_ans_size = amp_style_to_ans(
+            style_state, style_ans, sizeof(style_ans)
         );
 
-        if (size < sizeof(style_str) && str_sz + size < dst_sz) {
-            memcpy(dst + str_sz, style_str, size);
+        if (style_ans_size) {
+            ans_size += amp_str_append(
+                ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size),
+                style_ans
+            );
         }
+        else ans_size += style_ans_size;
 
-        str_sz += size;
+        const char *glyph_str = amp_get_glyph(img, x, y);
 
-        const char *glyph = amp_get_glyph(img, x, y);
+        if (!glyph_str || *glyph_str == '\0') {
+            ans_size += amp_str_append(
+                ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size), " "
+            );
 
-        if (!glyph || *glyph == '\0') {
-            if (str_sz + 1 < dst_sz) {
-                dst[str_sz] = ' ';
-            }
-
-            ++str_sz;
             continue;
         }
 
-        size_t gsz = strlen(glyph);
+        ans_size += amp_str_append(
+            ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size), glyph_str
+        );
+    }
 
-        if (str_sz + gsz < dst_sz) {
-            memcpy(dst + str_sz, glyph, gsz);
+    ans_size += amp_str_append(
+        ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size), "\x1b[0m"
+    );
+
+    if (ans_size < ans_dst_size) {
+        ans_dst[ans_size] = '\0';
+    }
+
+    return (
+        // The number of characters that would have been written if
+        // ans_dst_size had been sufficiently large, not counting the
+        // terminating null character.
+        ans_size
+    );
+}
+
+static inline size_t amp_sub_size(size_t a, size_t b) {
+    size_t result;
+    return ckd_sub(&result, a, b) ? 0 : result;
+}
+
+static inline size_t amp_to_ans(
+    const struct amp_type *amp, char *ans_dst, size_t ans_dst_size
+) {
+    size_t ans_size = 0;
+
+    for (uint32_t y = 0; y < amp->height; ++y) {
+        ans_size += amp_row_to_ans(
+            amp, y, ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size)
+        );
+
+        if (y + 1 < amp->height) {
+            ans_size += amp_str_append(
+                ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size), "\r\n"
+            );
         }
-
-        str_sz += gsz;
     }
 
-    int ret = snprintf(dst + str_sz, dst_sz - str_sz, "%s", "\x1b[0m");
-
-    if (ret < 0 || (size_t) ret >= dst_sz) {
-        dst[str_sz] = '\0';
-    }
-    else {
-        str_sz += (size_t) ret;
+    if (ans_size < ans_dst_size) {
+        ans_dst[ans_size] = '\0';
     }
 
-    if (str_sz < dst_sz) {
-        dst[str_sz] = '\0';
-    }
-    else if (dst_sz) {
-        dst[dst_sz - 1] = '\0';
-    }
-
-    return ++str_sz;
+    return ans_size;
 }
 
 static inline struct amp_style_type amp_style_cell_deserialize(
