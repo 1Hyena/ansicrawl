@@ -32,10 +32,12 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdckdint.h>
+#include <limits.h>
 ////////////////////////////////////////////////////////////////////////////////
 
 
 struct amp_type;
+struct amp_rgb_type;
 struct amp_style_type;
 
 static constexpr size_t AMP_CELL_GLYPH_SIZE = 5; // 4 bytes for UTF8 + null byte
@@ -89,18 +91,50 @@ static inline const char *              amp_get_glyph(
     uint32_t                                x,
     uint32_t                                y
 );
-static inline struct amp_style_type     amp_get_style(
-    const struct amp_type *                 amp,
-    uint32_t                                x,
-    uint32_t                                y
-);
 static inline bool                      amp_set_style(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
     struct amp_style_type                   style
 );
+static inline bool                      amp_set_background(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    struct amp_rgb_type                     rgb
+);
+static inline bool                      amp_reset_background(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y
+);
+static inline bool                      amp_set_foreground(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    struct amp_rgb_type                     rgb
+);
+static inline bool                      amp_reset_foreground(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y
+);
+static inline struct amp_style_type     amp_get_style(
+    const struct amp_type *                 amp,
+    uint32_t                                x,
+    uint32_t                                y
+);
+static inline struct amp_rgb_type       amp_rgb(
+    uint8_t                                 r,
+    uint8_t                                 g,
+    uint8_t                                 b
+);
 ////////////////////////////////////////////////////////////////////////////////
+
+typedef enum : uint8_t {
+    AMP_PAL_RGB16 = 0,
+    AMP_PAL_24BIT
+} AMP_PALETTE;
 
 struct amp_type {
     uint32_t width;
@@ -115,20 +149,19 @@ struct amp_type {
         size_t size;
         uint8_t *data;
     } style;
+
+    AMP_PALETTE palette;
+};
+
+struct amp_rgb_type {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
 };
 
 struct amp_style_type {
-    struct {
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
-    } fg;
-
-    struct {
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
-    } bg;
+    struct amp_rgb_type fg;
+    struct amp_rgb_type bg;
 
     struct {
         bool fg:1;
@@ -144,6 +177,246 @@ struct amp_style_type {
         bool broken:1;
         bool reset:1;
     } bitset;
+};
+
+typedef enum : uint8_t {
+    AMP_RGB16_NONE = 0,
+    ////////////////////////////////////////////////////////////////////////////
+    AMP_RGB16_BLACK,        AMP_RGB16_MAROON,       AMP_RGB16_GREEN,
+    AMP_RGB16_OLIVE,        AMP_RGB16_NAVY,         AMP_RGB16_PURPLE,
+    AMP_RGB16_TEAL,         AMP_RGB16_SILVER,       AMP_RGB16_GRAY,
+    AMP_RGB16_RED,          AMP_RGB16_LIME,         AMP_RGB16_YELLOW,
+    AMP_RGB16_BLUE,         AMP_RGB16_MAGENTA,      AMP_RGB16_CYAN,
+    AMP_RGB16_WHITE,
+    ////////////////////////////////////////////////////////////////////////////
+    AMP_MAX_RGB16
+} AMP_RGB16;
+
+static const char *amp_number_table[] = {
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
+    "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25",
+    "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37",
+    "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49",
+    "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61",
+    "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73",
+    "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85",
+    "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97",
+    "98", "99", "100", "101", "102", "103", "104", "105", "106", "107", "108",
+    "109", "110", "111", "112", "113", "114", "115", "116", "117", "118", "119",
+    "120", "121", "122", "123", "124", "125", "126", "127", "128", "129", "130",
+    "131", "132", "133", "134", "135", "136", "137", "138", "139", "140", "141",
+    "142", "143", "144", "145", "146", "147", "148", "149", "150", "151", "152",
+    "153", "154", "155", "156", "157", "158", "159", "160", "161", "162", "163",
+    "164", "165", "166", "167", "168", "169", "170", "171", "172", "173", "174",
+    "175", "176", "177", "178", "179", "180", "181", "182", "183", "184", "185",
+    "186", "187", "188", "189", "190", "191", "192", "193", "194", "195", "196",
+    "197", "198", "199", "200", "201", "202", "203", "204", "205", "206", "207",
+    "208", "209", "210", "211", "212", "213", "214", "215", "216", "217", "218",
+    "219", "220", "221", "222", "223", "224", "225", "226", "227", "228", "229",
+    "230", "231", "232", "233", "234", "235", "236", "237", "238", "239", "240",
+    "241", "242", "243", "244", "245", "246", "247", "248", "249", "250", "251",
+    "252", "253", "254", "255"
+};
+
+static const struct amp_rgb16_type {
+    const char *        code;
+    struct amp_rgb_type rgb;
+    AMP_RGB16           index;
+    bool                bright:1;
+} amp_rgb16_fg_table[] = {
+    [AMP_RGB16_NONE] = {
+        .index  = AMP_RGB16_NONE,
+        .code   = ""
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_RGB16_BLACK] = {
+        .index  = AMP_RGB16_BLACK,
+        .code   = "30",
+        .rgb    = { .r  = 0,    .g  = 0,    .b  = 0     }
+    },
+    [AMP_RGB16_MAROON] = {
+        .index  = AMP_RGB16_MAROON,
+        .code   = "31",
+        .rgb    = { .r  = 128,  .g  = 0,    .b  = 0     }
+    },
+    [AMP_RGB16_GREEN] = {
+        .index  = AMP_RGB16_GREEN,
+        .code   = "32",
+        .rgb    = { .r  = 0,    .g  = 128,  .b  = 0     }
+    },
+    [AMP_RGB16_OLIVE] = {
+        .index  = AMP_RGB16_OLIVE,
+        .code   = "33",
+        .rgb    = { .r  = 128,  .g  = 128,  .b  = 0     }
+    },
+    [AMP_RGB16_NAVY] = {
+        .index  = AMP_RGB16_NAVY,
+        .code   = "34",
+        .rgb    = { .r  = 0,    .g  = 0,    .b  = 128   }
+    },
+    [AMP_RGB16_PURPLE] = {
+        .index  = AMP_RGB16_PURPLE,
+        .code   = "35",
+        .rgb    = { .r  = 128,  .g  = 0,    .b  = 128   }
+    },
+    [AMP_RGB16_TEAL] = {
+        .index  = AMP_RGB16_TEAL,
+        .code   = "36",
+        .rgb    = { .r  = 0,    .g  = 128,  .b  = 128   }
+    },
+    [AMP_RGB16_SILVER] = {
+        .index  = AMP_RGB16_SILVER,
+        .code   = "37",
+        .rgb    = { .r  = 128,  .g  = 128,  .b  = 128   }
+    },
+    [AMP_RGB16_GRAY] = {
+        .index  = AMP_RGB16_GRAY,
+        .code   = "30",
+        .rgb    = { .r  = 64,   .g  = 64,   .b  = 64    },
+        .bright = true
+    },
+    [AMP_RGB16_RED] = {
+        .index  = AMP_RGB16_RED,
+        .code   = "31",
+        .rgb    = { .r  = 255,  .g  = 0,    .b  = 0     },
+        .bright = true
+    },
+    [AMP_RGB16_LIME] = {
+        .index  = AMP_RGB16_LIME,
+        .code   = "32",
+        .rgb    = { .r  = 0,    .g  = 255,  .b  = 0     },
+        .bright = true
+    },
+    [AMP_RGB16_YELLOW] = {
+        .index  = AMP_RGB16_YELLOW,
+        .code   = "33",
+        .rgb    = { .r  = 255,  .g  = 255,  .b  = 0     },
+        .bright = true
+    },
+    [AMP_RGB16_BLUE] = {
+        .index  = AMP_RGB16_BLUE,
+        .code   = "34",
+        .rgb    = { .r  = 0,    .g  = 0,    .b  = 255   },
+        .bright = true
+    },
+    [AMP_RGB16_MAGENTA] = {
+        .index  = AMP_RGB16_MAGENTA,
+        .code   = "35",
+        .rgb    = { .r  = 255,  .g  = 0,    .b  = 255   },
+        .bright = true
+    },
+    [AMP_RGB16_CYAN] = {
+        .index  = AMP_RGB16_CYAN,
+        .code   = "36",
+        .rgb    = { .r  = 0,    .g  = 255,  .b  = 255   },
+        .bright = true
+    },
+    [AMP_RGB16_WHITE] = {
+        .index  = AMP_RGB16_WHITE,
+        .code   = "37",
+        .rgb    = { .r  = 255,  .g  = 255,  .b  = 255   },
+        .bright = true
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_MAX_RGB16] = {}
+};
+
+static const struct amp_rgb16_type amp_rgb16_bg_table[] = {
+    [AMP_RGB16_NONE] = {
+        .index  = AMP_RGB16_NONE,
+        .code   = ""
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_RGB16_BLACK] = {
+        .index  = AMP_RGB16_BLACK,
+        .code   = "40",
+        .rgb    = { .r  = 0,    .g  = 0,    .b  = 0     }
+    },
+    [AMP_RGB16_MAROON] = {
+        .index  = AMP_RGB16_MAROON,
+        .code   = "41",
+        .rgb    = { .r  = 128,  .g  = 0,    .b  = 0     }
+    },
+    [AMP_RGB16_GREEN] = {
+        .index  = AMP_RGB16_GREEN,
+        .code   = "42",
+        .rgb    = { .r  = 0,    .g  = 128,  .b  = 0     }
+    },
+    [AMP_RGB16_OLIVE] = {
+        .index  = AMP_RGB16_OLIVE,
+        .code   = "43",
+        .rgb    = { .r  = 128,  .g  = 128,  .b  = 0     }
+    },
+    [AMP_RGB16_NAVY] = {
+        .index  = AMP_RGB16_NAVY,
+        .code   = "44",
+        .rgb    = { .r  = 0,    .g  = 0,    .b  = 128   }
+    },
+    [AMP_RGB16_PURPLE] = {
+        .index  = AMP_RGB16_PURPLE,
+        .code   = "45",
+        .rgb    = { .r  = 128,  .g  = 0,    .b  = 128   }
+    },
+    [AMP_RGB16_TEAL] = {
+        .index  = AMP_RGB16_TEAL,
+        .code   = "46",
+        .rgb    = { .r  = 0,    .g  = 128,  .b  = 128   }
+    },
+    [AMP_RGB16_SILVER] = {
+        .index  = AMP_RGB16_SILVER,
+        .code   = "47",
+        .rgb    = { .r  = 128,  .g  = 128,  .b  = 128   }
+    },
+    [AMP_RGB16_GRAY] = {
+        .index  = AMP_RGB16_GRAY,
+        .code   = "40",
+        .rgb    = { .r  = 64,   .g  = 64,   .b  = 64    },
+        .bright = true
+    },
+    [AMP_RGB16_RED] = {
+        .index  = AMP_RGB16_RED,
+        .code   = "41",
+        .rgb    = { .r  = 255,  .g  = 0,    .b  = 0     },
+        .bright = true
+    },
+    [AMP_RGB16_LIME] = {
+        .index  = AMP_RGB16_LIME,
+        .code   = "42",
+        .rgb    = { .r  = 0,    .g  = 255,  .b  = 0     },
+        .bright = true
+    },
+    [AMP_RGB16_YELLOW] = {
+        .index  = AMP_RGB16_YELLOW,
+        .code   = "43",
+        .rgb    = { .r  = 255,  .g  = 255,  .b  = 0     },
+        .bright = true
+    },
+    [AMP_RGB16_BLUE] = {
+        .index  = AMP_RGB16_BLUE,
+        .code   = "44",
+        .rgb    = { .r  = 0,    .g  = 0,    .b  = 255   },
+        .bright = true
+    },
+    [AMP_RGB16_MAGENTA] = {
+        .index  = AMP_RGB16_MAGENTA,
+        .code   = "45",
+        .rgb    = { .r  = 255,  .g  = 0,    .b  = 255   },
+        .bright = true
+    },
+    [AMP_RGB16_CYAN] = {
+        .index  = AMP_RGB16_CYAN,
+        .code   = "46",
+        .rgb    = { .r  = 0,    .g  = 255,  .b  = 255   },
+        .bright = true
+    },
+    [AMP_RGB16_WHITE] = {
+        .index  = AMP_RGB16_WHITE,
+        .code   = "47",
+        .rgb    = { .r  = 255,  .g  = 255,  .b  = 255   },
+        .bright = true
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_MAX_RGB16] = {}
 };
 
 // Private API: ////////////////////////////////////////////////////////////////
@@ -164,12 +437,14 @@ static inline int                       amp_utf8_code_point_size(
 );
 static inline size_t                    amp_style_to_ans(
     struct amp_style_type                   style,
+    AMP_PALETTE                             palette,
     char *                                  ans_dst,
     size_t                                  ans_dst_size
 );
 static inline size_t                    amp_style_update_to_ans(
     struct amp_style_type                   prev_style,
     struct amp_style_type                   next_style,
+    AMP_PALETTE                             palette,
     char *                                  ans_dst,
     size_t                                  ans_dst_size
 );
@@ -190,6 +465,10 @@ static inline size_t                    amp_str_append(
     char *                                  str_dst,
     size_t                                  str_dst_size,
     const char *                            str_src
+);
+static inline struct amp_rgb16_type     amp_find_rgb16(
+    const struct amp_rgb16_type *           table,
+    struct amp_rgb_type                     rgb
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -341,6 +620,56 @@ static inline bool amp_set_style(
     );
 }
 
+static inline bool amp_set_background(
+    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_rgb_type rgb
+) {
+    struct amp_style_type style = amp_get_style(amp, x, y);
+
+    style.bg.r = rgb.r;
+    style.bg.g = rgb.g;
+    style.bg.b = rgb.b;
+    style.bitset.bg = true;
+
+    return amp_set_style(amp, x, y, style);
+}
+
+static inline bool amp_reset_background(
+    struct amp_type *amp, uint32_t x, uint32_t y
+) {
+    struct amp_style_type style = amp_get_style(amp, x, y);
+
+    style.bitset.bg = false;
+
+    return amp_set_style(amp, x, y, style);
+}
+
+static inline bool amp_set_foreground(
+    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_rgb_type rgb
+) {
+    struct amp_style_type style = amp_get_style(amp, x, y);
+
+    style.fg.r = rgb.r;
+    style.fg.g = rgb.g;
+    style.fg.b = rgb.b;
+    style.bitset.fg = true;
+
+    return amp_set_style(amp, x, y, style);
+}
+
+static inline bool amp_reset_foreground(
+    struct amp_type *amp, uint32_t x, uint32_t y
+) {
+    struct amp_style_type style = amp_get_style(amp, x, y);
+
+    style.bitset.fg = false;
+
+    return amp_set_style(amp, x, y, style);
+}
+
+static inline struct amp_rgb_type amp_rgb(uint8_t r, uint8_t g, uint8_t b) {
+    return (struct amp_rgb_type) { .r = r, .g = g, .b = b };
+}
+
 static inline const char *amp_get_glyph(
     const struct amp_type *amp, uint32_t x, uint32_t y
 ) {
@@ -435,7 +764,8 @@ static inline size_t amp_str_append(
 }
 
 static inline size_t amp_style_to_ans(
-    struct amp_style_type style, char *ans_dst, size_t ans_dst_size
+    struct amp_style_type style, AMP_PALETTE pal,
+    char *ans_dst, size_t ans_dst_size
 ) {
     char ans[256];
     size_t ans_size = 0;
@@ -468,6 +798,170 @@ static inline size_t amp_style_to_ans(
         );
     }
 
+    if (pal == AMP_PAL_24BIT) {
+        if (style.bitset.fg) {
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "38;2;"
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                amp_number_table[style.fg.r]
+            );
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                amp_number_table[style.fg.g]
+            );
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                amp_number_table[style.fg.b]
+            );
+        }
+
+        if (style.bitset.bg) {
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "48;2;"
+            );
+
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                amp_number_table[style.bg.r]
+            );
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                amp_number_table[style.bg.g]
+            );
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                amp_number_table[style.bg.b]
+            );
+        }
+    }
+    else {
+        if (style.bitset.bg) {
+            auto bg_rgb_row = amp_find_rgb16(
+                amp_rgb16_bg_table, (struct amp_rgb_type) {
+                    .r = style.bg.r,
+                    .g = style.bg.g,
+                    .b = style.bg.b
+                }
+            );
+
+            if (bg_rgb_row.bright) {
+                struct amp_rgb_type buf = style.bg;
+                style.bg = style.fg;
+                style.fg = buf;
+                style.bitset.bg = style.bitset.fg;
+                style.bitset.fg = true;
+
+                ans_size += (
+                    ans_size ? amp_str_append(
+                        ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                    ) : 0
+                );
+
+                ans_size += amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "7"
+                );
+            }
+        }
+
+        if (style.bitset.fg) {
+            auto fg_rgb_row = amp_find_rgb16(
+                amp_rgb16_fg_table, (struct amp_rgb_type) {
+                    .r = style.fg.r,
+                    .g = style.fg.g,
+                    .b = style.fg.b
+                }
+            );
+
+            if (fg_rgb_row.bright) {
+                ans_size += (
+                    ans_size ? amp_str_append(
+                        ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                    ) : 0
+                );
+
+                ans_size += amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), "1"
+                );
+            }
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                fg_rgb_row.code
+            );
+        }
+
+        if (style.bitset.bg) {
+            auto bg_rgb_row = amp_find_rgb16(
+                amp_rgb16_bg_table, (struct amp_rgb_type) {
+                    .r = style.bg.r,
+                    .g = style.bg.g,
+                    .b = style.bg.b
+                }
+            );
+
+            ans_size += (
+                ans_size ? amp_str_append(
+                    ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
+                ) : 0
+            );
+
+            ans_size += amp_str_append(
+                ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
+                bg_rgb_row.code
+            );
+        }
+    }
+
     if (ans_size) {
         size_t written = 0;
 
@@ -493,7 +987,7 @@ static inline size_t amp_style_to_ans(
 }
 
 static inline size_t amp_style_update_to_ans(
-    struct amp_style_type prev, struct amp_style_type next,
+    struct amp_style_type prev, struct amp_style_type next, AMP_PALETTE pal,
     char *ans_dst, size_t ans_dst_size
 ) {
     if ((prev.bitset.hidden         && !next.bitset.hidden)
@@ -501,12 +995,14 @@ static inline size_t amp_style_update_to_ans(
     ||  (prev.bitset.italic         && !next.bitset.italic)
     ||  (prev.bitset.underline      && !next.bitset.underline)
     ||  (prev.bitset.blinking       && !next.bitset.blinking)
-    ||  (prev.bitset.strikethrough  && !next.bitset.strikethrough)) {
+    ||  (prev.bitset.strikethrough  && !next.bitset.strikethrough)
+    ||  (prev.bitset.fg             && !next.bitset.fg)
+    ||  (prev.bitset.bg             && !next.bitset.bg)) {
         struct amp_style_type style = next;
 
         style.bitset.reset = true;
 
-        return amp_style_to_ans(style, ans_dst, ans_dst_size);
+        return amp_style_to_ans(style, pal, ans_dst, ans_dst_size);
     }
 
     char buf[256];
@@ -555,11 +1051,23 @@ static inline size_t amp_style_update_to_ans(
                     !prev.bitset.strikethrough && next.bitset.strikethrough
                 )
             }
+        },
+        {
+            .fg = next.fg,
+            .bg = next.bg,
+            .bitset = {
+                .fg = (
+                    !prev.bitset.fg && next.bitset.fg
+                ),
+                .bg = (
+                    !prev.bitset.bg && next.bitset.bg
+                )
+            }
         }
     };
 
     for (size_t i=0; i<sizeof(styles)/sizeof(styles[0]); ++i) {
-        size_t buf_size = amp_style_to_ans(styles[i], buf, sizeof(buf));
+        size_t buf_size = amp_style_to_ans(styles[i], pal, buf, sizeof(buf));
 
         if (buf_size > 3 && buf_size < sizeof(buf)) {
             buf[buf_size - 1] = '\0'; // delete the 'm' terminator
@@ -617,7 +1125,8 @@ static inline size_t amp_row_cut_to_ans(
         struct amp_style_type next_style_state = amp_get_style(amp, x, y);
 
         size_t style_ans_size = amp_style_update_to_ans(
-            prev_style_state, next_style_state, style_ans, sizeof(style_ans)
+            prev_style_state, next_style_state, amp->palette,
+            style_ans, sizeof(style_ans)
         );
 
         prev_style_state = next_style_state;
@@ -753,6 +1262,36 @@ static inline bool amp_style_cell_serialize(
     );
 
     return true;
+}
+
+static inline struct amp_rgb16_type amp_find_rgb16(
+    const struct amp_rgb16_type *table, struct amp_rgb_type rgb
+) {
+    long best_d = LONG_MAX;
+    const struct amp_rgb16_type *best_row = nullptr;
+
+    for (; table->code; ++table) {
+        if (table->index == AMP_RGB16_NONE) {
+            continue;
+        }
+
+        long dr = rgb.r;
+        long dg = rgb.g;
+        long db = rgb.b;
+
+         dr -= table->rgb.r;
+         dg -= table->rgb.g;
+         db -= table->rgb.b;
+
+         long d = dr * dr + dg * dg + db * db;
+
+         if (d < best_d) {
+            best_d = d;
+            best_row = table;
+         }
+    }
+
+    return *best_row;
 }
 
 #endif
