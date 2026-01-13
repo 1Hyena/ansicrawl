@@ -46,6 +46,17 @@ static constexpr size_t AMP_CELL_SIZE       = (
     AMP_CELL_GLYPH_SIZE + AMP_CELL_STYLE_SIZE
 );
 
+typedef enum : uint8_t {
+    AMP_COLOR_NONE = 0,
+    ////////////////////////////////////////////////////////////////////////////
+    AMP_BLACK,      AMP_MAROON,     AMP_GREEN,      AMP_OLIVE,      AMP_NAVY,
+    AMP_PURPLE,     AMP_TEAL,       AMP_SILVER,     AMP_GRAY,       AMP_RED,
+    AMP_LIME,       AMP_YELLOW,     AMP_BLUE,       AMP_MAGENTA,    AMP_CYAN,
+    AMP_WHITE,
+    ////////////////////////////////////////////////////////////////////////////
+    AMP_MAX_COLOR
+} AMP_COLOR;
+
 // Public API: /////////////////////////////////////////////////////////////////
 static inline size_t                    amp_init(
     struct amp_type *                       amp,
@@ -129,6 +140,9 @@ static inline struct amp_rgb_type       amp_rgb(
     uint8_t                                 g,
     uint8_t                                 b
 );
+static inline struct amp_rgb_type       amp_color_rgb(
+    AMP_COLOR                               color
+);
 ////////////////////////////////////////////////////////////////////////////////
 
 typedef enum : uint8_t {
@@ -179,19 +193,6 @@ struct amp_style_type {
     } bitset;
 };
 
-typedef enum : uint8_t {
-    AMP_RGB16_NONE = 0,
-    ////////////////////////////////////////////////////////////////////////////
-    AMP_RGB16_BLACK,        AMP_RGB16_MAROON,       AMP_RGB16_GREEN,
-    AMP_RGB16_OLIVE,        AMP_RGB16_NAVY,         AMP_RGB16_PURPLE,
-    AMP_RGB16_TEAL,         AMP_RGB16_SILVER,       AMP_RGB16_GRAY,
-    AMP_RGB16_RED,          AMP_RGB16_LIME,         AMP_RGB16_YELLOW,
-    AMP_RGB16_BLUE,         AMP_RGB16_MAGENTA,      AMP_RGB16_CYAN,
-    AMP_RGB16_WHITE,
-    ////////////////////////////////////////////////////////////////////////////
-    AMP_MAX_RGB16
-} AMP_RGB16;
-
 static const char *amp_number_table[] = {
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
     "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25",
@@ -221,202 +222,202 @@ static const char *amp_number_table[] = {
 static const struct amp_rgb16_type {
     const char *        code;
     struct amp_rgb_type rgb;
-    AMP_RGB16           index;
+    AMP_COLOR           index;
     bool                bright:1;
 } amp_rgb16_fg_table[] = {
-    [AMP_RGB16_NONE] = {
-        .index  = AMP_RGB16_NONE,
+    [AMP_COLOR_NONE] = {
+        .index  = AMP_COLOR_NONE,
         .code   = ""
     },
     ////////////////////////////////////////////////////////////////////////////
-    [AMP_RGB16_BLACK] = {
-        .index  = AMP_RGB16_BLACK,
+    [AMP_BLACK] = {
+        .index  = AMP_BLACK,
         .code   = "30",
         .rgb    = { .r  = 0,    .g  = 0,    .b  = 0     }
     },
-    [AMP_RGB16_MAROON] = {
-        .index  = AMP_RGB16_MAROON,
+    [AMP_MAROON] = {
+        .index  = AMP_MAROON,
         .code   = "31",
         .rgb    = { .r  = 128,  .g  = 0,    .b  = 0     }
     },
-    [AMP_RGB16_GREEN] = {
-        .index  = AMP_RGB16_GREEN,
+    [AMP_GREEN] = {
+        .index  = AMP_GREEN,
         .code   = "32",
         .rgb    = { .r  = 0,    .g  = 128,  .b  = 0     }
     },
-    [AMP_RGB16_OLIVE] = {
-        .index  = AMP_RGB16_OLIVE,
+    [AMP_OLIVE] = {
+        .index  = AMP_OLIVE,
         .code   = "33",
         .rgb    = { .r  = 128,  .g  = 128,  .b  = 0     }
     },
-    [AMP_RGB16_NAVY] = {
-        .index  = AMP_RGB16_NAVY,
+    [AMP_NAVY] = {
+        .index  = AMP_NAVY,
         .code   = "34",
         .rgb    = { .r  = 0,    .g  = 0,    .b  = 128   }
     },
-    [AMP_RGB16_PURPLE] = {
-        .index  = AMP_RGB16_PURPLE,
+    [AMP_PURPLE] = {
+        .index  = AMP_PURPLE,
         .code   = "35",
         .rgb    = { .r  = 128,  .g  = 0,    .b  = 128   }
     },
-    [AMP_RGB16_TEAL] = {
-        .index  = AMP_RGB16_TEAL,
+    [AMP_TEAL] = {
+        .index  = AMP_TEAL,
         .code   = "36",
         .rgb    = { .r  = 0,    .g  = 128,  .b  = 128   }
     },
-    [AMP_RGB16_SILVER] = {
-        .index  = AMP_RGB16_SILVER,
+    [AMP_SILVER] = {
+        .index  = AMP_SILVER,
         .code   = "37",
         .rgb    = { .r  = 128,  .g  = 128,  .b  = 128   }
     },
-    [AMP_RGB16_GRAY] = {
-        .index  = AMP_RGB16_GRAY,
+    [AMP_GRAY] = {
+        .index  = AMP_GRAY,
         .code   = "30",
         .rgb    = { .r  = 64,   .g  = 64,   .b  = 64    },
         .bright = true
     },
-    [AMP_RGB16_RED] = {
-        .index  = AMP_RGB16_RED,
+    [AMP_RED] = {
+        .index  = AMP_RED,
         .code   = "31",
         .rgb    = { .r  = 255,  .g  = 0,    .b  = 0     },
         .bright = true
     },
-    [AMP_RGB16_LIME] = {
-        .index  = AMP_RGB16_LIME,
+    [AMP_LIME] = {
+        .index  = AMP_LIME,
         .code   = "32",
         .rgb    = { .r  = 0,    .g  = 255,  .b  = 0     },
         .bright = true
     },
-    [AMP_RGB16_YELLOW] = {
-        .index  = AMP_RGB16_YELLOW,
+    [AMP_YELLOW] = {
+        .index  = AMP_YELLOW,
         .code   = "33",
         .rgb    = { .r  = 255,  .g  = 255,  .b  = 0     },
         .bright = true
     },
-    [AMP_RGB16_BLUE] = {
-        .index  = AMP_RGB16_BLUE,
+    [AMP_BLUE] = {
+        .index  = AMP_BLUE,
         .code   = "34",
         .rgb    = { .r  = 0,    .g  = 0,    .b  = 255   },
         .bright = true
     },
-    [AMP_RGB16_MAGENTA] = {
-        .index  = AMP_RGB16_MAGENTA,
+    [AMP_MAGENTA] = {
+        .index  = AMP_MAGENTA,
         .code   = "35",
         .rgb    = { .r  = 255,  .g  = 0,    .b  = 255   },
         .bright = true
     },
-    [AMP_RGB16_CYAN] = {
-        .index  = AMP_RGB16_CYAN,
+    [AMP_CYAN] = {
+        .index  = AMP_CYAN,
         .code   = "36",
         .rgb    = { .r  = 0,    .g  = 255,  .b  = 255   },
         .bright = true
     },
-    [AMP_RGB16_WHITE] = {
-        .index  = AMP_RGB16_WHITE,
+    [AMP_WHITE] = {
+        .index  = AMP_WHITE,
         .code   = "37",
         .rgb    = { .r  = 255,  .g  = 255,  .b  = 255   },
         .bright = true
     },
     ////////////////////////////////////////////////////////////////////////////
-    [AMP_MAX_RGB16] = {}
+    [AMP_MAX_COLOR] = {}
 };
 
 static const struct amp_rgb16_type amp_rgb16_bg_table[] = {
-    [AMP_RGB16_NONE] = {
-        .index  = AMP_RGB16_NONE,
+    [AMP_COLOR_NONE] = {
+        .index  = AMP_COLOR_NONE,
         .code   = ""
     },
     ////////////////////////////////////////////////////////////////////////////
-    [AMP_RGB16_BLACK] = {
-        .index  = AMP_RGB16_BLACK,
+    [AMP_BLACK] = {
+        .index  = AMP_BLACK,
         .code   = "40",
         .rgb    = { .r  = 0,    .g  = 0,    .b  = 0     }
     },
-    [AMP_RGB16_MAROON] = {
-        .index  = AMP_RGB16_MAROON,
+    [AMP_MAROON] = {
+        .index  = AMP_MAROON,
         .code   = "41",
         .rgb    = { .r  = 128,  .g  = 0,    .b  = 0     }
     },
-    [AMP_RGB16_GREEN] = {
-        .index  = AMP_RGB16_GREEN,
+    [AMP_GREEN] = {
+        .index  = AMP_GREEN,
         .code   = "42",
         .rgb    = { .r  = 0,    .g  = 128,  .b  = 0     }
     },
-    [AMP_RGB16_OLIVE] = {
-        .index  = AMP_RGB16_OLIVE,
+    [AMP_OLIVE] = {
+        .index  = AMP_OLIVE,
         .code   = "43",
         .rgb    = { .r  = 128,  .g  = 128,  .b  = 0     }
     },
-    [AMP_RGB16_NAVY] = {
-        .index  = AMP_RGB16_NAVY,
+    [AMP_NAVY] = {
+        .index  = AMP_NAVY,
         .code   = "44",
         .rgb    = { .r  = 0,    .g  = 0,    .b  = 128   }
     },
-    [AMP_RGB16_PURPLE] = {
-        .index  = AMP_RGB16_PURPLE,
+    [AMP_PURPLE] = {
+        .index  = AMP_PURPLE,
         .code   = "45",
         .rgb    = { .r  = 128,  .g  = 0,    .b  = 128   }
     },
-    [AMP_RGB16_TEAL] = {
-        .index  = AMP_RGB16_TEAL,
+    [AMP_TEAL] = {
+        .index  = AMP_TEAL,
         .code   = "46",
         .rgb    = { .r  = 0,    .g  = 128,  .b  = 128   }
     },
-    [AMP_RGB16_SILVER] = {
-        .index  = AMP_RGB16_SILVER,
+    [AMP_SILVER] = {
+        .index  = AMP_SILVER,
         .code   = "47",
         .rgb    = { .r  = 128,  .g  = 128,  .b  = 128   }
     },
-    [AMP_RGB16_GRAY] = {
-        .index  = AMP_RGB16_GRAY,
+    [AMP_GRAY] = {
+        .index  = AMP_GRAY,
         .code   = "40",
         .rgb    = { .r  = 64,   .g  = 64,   .b  = 64    },
         .bright = true
     },
-    [AMP_RGB16_RED] = {
-        .index  = AMP_RGB16_RED,
+    [AMP_RED] = {
+        .index  = AMP_RED,
         .code   = "41",
         .rgb    = { .r  = 255,  .g  = 0,    .b  = 0     },
         .bright = true
     },
-    [AMP_RGB16_LIME] = {
-        .index  = AMP_RGB16_LIME,
+    [AMP_LIME] = {
+        .index  = AMP_LIME,
         .code   = "42",
         .rgb    = { .r  = 0,    .g  = 255,  .b  = 0     },
         .bright = true
     },
-    [AMP_RGB16_YELLOW] = {
-        .index  = AMP_RGB16_YELLOW,
+    [AMP_YELLOW] = {
+        .index  = AMP_YELLOW,
         .code   = "43",
         .rgb    = { .r  = 255,  .g  = 255,  .b  = 0     },
         .bright = true
     },
-    [AMP_RGB16_BLUE] = {
-        .index  = AMP_RGB16_BLUE,
+    [AMP_BLUE] = {
+        .index  = AMP_BLUE,
         .code   = "44",
         .rgb    = { .r  = 0,    .g  = 0,    .b  = 255   },
         .bright = true
     },
-    [AMP_RGB16_MAGENTA] = {
-        .index  = AMP_RGB16_MAGENTA,
+    [AMP_MAGENTA] = {
+        .index  = AMP_MAGENTA,
         .code   = "45",
         .rgb    = { .r  = 255,  .g  = 0,    .b  = 255   },
         .bright = true
     },
-    [AMP_RGB16_CYAN] = {
-        .index  = AMP_RGB16_CYAN,
+    [AMP_CYAN] = {
+        .index  = AMP_CYAN,
         .code   = "46",
         .rgb    = { .r  = 0,    .g  = 255,  .b  = 255   },
         .bright = true
     },
-    [AMP_RGB16_WHITE] = {
-        .index  = AMP_RGB16_WHITE,
+    [AMP_WHITE] = {
+        .index  = AMP_WHITE,
         .code   = "47",
         .rgb    = { .r  = 255,  .g  = 255,  .b  = 255   },
         .bright = true
     },
     ////////////////////////////////////////////////////////////////////////////
-    [AMP_MAX_RGB16] = {}
+    [AMP_MAX_COLOR] = {}
 };
 
 // Private API: ////////////////////////////////////////////////////////////////
@@ -1271,7 +1272,7 @@ static inline struct amp_rgb16_type amp_find_rgb16(
     const struct amp_rgb16_type *best_row = nullptr;
 
     for (; table->code; ++table) {
-        if (table->index == AMP_RGB16_NONE) {
+        if (table->index == AMP_COLOR_NONE) {
             continue;
         }
 
@@ -1292,6 +1293,14 @@ static inline struct amp_rgb16_type amp_find_rgb16(
     }
 
     return *best_row;
+}
+
+static inline struct amp_rgb_type amp_color_rgb(AMP_COLOR color) {
+    return (
+        color < AMP_MAX_COLOR ? (
+            amp_rgb16_fg_table[color].rgb
+        ) : amp_rgb16_fg_table[AMP_COLOR_NONE].rgb
+    );
 }
 
 #endif
