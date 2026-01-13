@@ -34,13 +34,61 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr size_t AMP_GLYPH_CELL_SIZE = 5; // 4 bytes for UTF8 + null
-static constexpr size_t AMP_STYLE_CELL_SIZE = 7;
-static constexpr size_t AMP_TOTAL_CELL_SIZE = (
-    AMP_GLYPH_CELL_SIZE + AMP_STYLE_CELL_SIZE
+struct amp_type;
+struct amp_style_type;
+
+static constexpr size_t AMP_CELL_GLYPH_SIZE = 5; // 4 bytes for UTF8 + null byte
+static constexpr size_t AMP_CELL_STYLE_SIZE = 7;
+static constexpr size_t AMP_CELL_SIZE       = (
+    AMP_CELL_GLYPH_SIZE + AMP_CELL_STYLE_SIZE
 );
 
-struct amp_image_type {
+// Public API: /////////////////////////////////////////////////////////////////
+static inline size_t                    amp_init(
+    struct amp_type *                       amp,
+    void *                                  data,
+    size_t                                  data_size
+);
+static inline void                      amp_clear(
+    struct amp_type *                       amp
+);
+static inline size_t                    amp_row_to_str(
+    const struct amp_type *                 amp,
+    uint32_t                                y,
+    char *                                  dst,
+    size_t                                  dst_size
+);
+static inline size_t                    amp_glyph_row_to_str(
+    const struct amp_type *                 amp,
+    uint32_t                                y,
+    char *                                  dst,
+    size_t                                  dst_size
+);
+static inline const char *              amp_set_glyph(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    const char *                            glyph
+);
+static inline const char *              amp_get_glyph(
+    const struct amp_type *                 amp,
+    uint32_t                                x,
+    uint32_t                                y
+);
+static inline struct amp_style_type     amp_get_style(
+    const struct amp_type *                 amp,
+    uint32_t                                x,
+    uint32_t                                y
+);
+static inline bool                      amp_set_style(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    struct amp_style_type                   style
+);
+////////////////////////////////////////////////////////////////////////////////
+
+struct amp_type {
     uint32_t width;
     uint32_t height;
 
@@ -55,7 +103,7 @@ struct amp_image_type {
     } style;
 };
 
-struct amp_style_cell_type {
+struct amp_style_type {
     struct {
         uint8_t r;
         uint8_t g;
@@ -81,46 +129,51 @@ struct amp_style_cell_type {
     } bitset;
 };
 
-static inline size_t amp_init(struct amp_image_type *, void *data, size_t size);
-static inline void amp_clear(struct amp_image_type *);
-static ssize_t amp_get_cell_index(
-    const struct amp_image_type *img, long x, long y
-);
-static int amp_utf8_code_point_size(const char *str, size_t n);
-static inline const char *amp_set_glyph(
-    struct amp_image_type *, uint32_t x, uint32_t y, const char *glyph
-);
-static inline const char *amp_get_glyph(
-    const struct amp_image_type *, uint32_t x, uint32_t y
-);
-static inline struct amp_style_cell_type amp_get_style(
-    const struct amp_image_type *img, uint32_t x, uint32_t y
-);
-static inline bool amp_set_style(
-    struct amp_image_type *, uint32_t x, uint32_t y, struct amp_style_cell_type
-);
-static inline size_t amp_glyph_row_to_str(
-    const struct amp_image_type *, uint32_t y, char *dst, size_t dst_sz
-);
-static inline struct amp_style_cell_type amp_style_cell_deserialize(
-    const uint8_t *, size_t
-);
-static inline bool amp_style_cell_serialize(
-    struct amp_style_cell_type, uint8_t *dst, size_t dst_size
+// Private API: ////////////////////////////////////////////////////////////////
+static inline bool                      amp_set_style(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    struct amp_style_type                   style
 );
 
+static ssize_t                          amp_get_cell_index(
+    const struct amp_type *,
+    long x,
+    long y
+);
+static int                              amp_utf8_code_point_size(
+    const char *                            str,
+    size_t                                  str_sz
+);
+static inline size_t                    amp_style_to_str(
+    struct amp_style_type                   style,
+    char *                                  dst,
+    size_t                                  dst_sz
+);
+static inline struct amp_style_type     amp_style_cell_deserialize(
+    const uint8_t *                         src,
+    size_t                                  src_size
+);
+static inline bool                      amp_style_cell_serialize(
+    struct amp_style_type                   style,
+    uint8_t *                               dst,
+    size_t                                  dst_size
+);
+////////////////////////////////////////////////////////////////////////////////
+
 static inline size_t amp_init(
-    struct amp_image_type *img, void *buf, size_t buf_size
+    struct amp_type *img, void *buf, size_t buf_size
 ) {
     const size_t bytes_required = (
-        AMP_TOTAL_CELL_SIZE * img->width * img->height
+        AMP_CELL_SIZE * img->width * img->height
     );
     const size_t cell_count = (
         (buf_size < bytes_required ? buf_size : bytes_required) /
-        AMP_TOTAL_CELL_SIZE
+        AMP_CELL_SIZE
     );
-    const size_t glyph_size = cell_count * AMP_GLYPH_CELL_SIZE;
-    const size_t style_size = cell_count * AMP_STYLE_CELL_SIZE;
+    const size_t glyph_size = cell_count * AMP_CELL_GLYPH_SIZE;
+    const size_t style_size = cell_count * AMP_CELL_STYLE_SIZE;
 
     img->glyph.data = (uint8_t *) buf;
     img->glyph.size = glyph_size;
@@ -133,13 +186,13 @@ static inline size_t amp_init(
     return bytes_required;
 }
 
-static inline void amp_clear(struct amp_image_type *img) {
+static inline void amp_clear(struct amp_type *img) {
     memset(img->glyph.data, 0, img->glyph.size);
     memset(img->style.data, 0, img->style.size);
 }
 
 static ssize_t amp_get_cell_index(
-    const struct amp_image_type *img, long x, long y
+    const struct amp_type *img, long x, long y
 ) {
     if (x < 0 || y < 0 || x >= img->width || y >= img->height) {
         return -1;
@@ -190,7 +243,7 @@ static int amp_utf8_code_point_size(const char *str, size_t n) {
 }
 
 static inline const char *amp_set_glyph(
-    struct amp_image_type *img, uint32_t x, uint32_t y, const char *glyph
+    struct amp_type *img, uint32_t x, uint32_t y, const char *glyph
 ) {
     ssize_t cell_index = amp_get_cell_index(img, x, y);
 
@@ -198,11 +251,11 @@ static inline const char *amp_set_glyph(
         return nullptr;
     }
 
-    if ((size_t) cell_index * AMP_GLYPH_CELL_SIZE >= img->glyph.size) {
+    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= img->glyph.size) {
         return nullptr;
     }
 
-    uint8_t data[AMP_GLYPH_CELL_SIZE] = {};
+    uint8_t data[AMP_CELL_GLYPH_SIZE] = {};
     uint8_t glyph_length = 0;
 
     for (; glyph_length < sizeof(data); ++glyph_length) {
@@ -229,7 +282,7 @@ static inline const char *amp_set_glyph(
     }
 
     char *dst = (char *) (
-        img->glyph.data + (size_t) cell_index * AMP_GLYPH_CELL_SIZE
+        img->glyph.data + (size_t) cell_index * AMP_CELL_GLYPH_SIZE
     );
 
     memcpy(dst, data, glyph_length + 1);
@@ -238,8 +291,8 @@ static inline const char *amp_set_glyph(
 }
 
 static inline bool amp_set_style(
-    struct amp_image_type *img, uint32_t x, uint32_t y,
-    struct amp_style_cell_type style
+    struct amp_type *img, uint32_t x, uint32_t y,
+    struct amp_style_type style
 ) {
     ssize_t cell_index = amp_get_cell_index(img, x, y);
 
@@ -247,18 +300,18 @@ static inline bool amp_set_style(
         return false;
     }
 
-    if ((size_t) cell_index * AMP_STYLE_CELL_SIZE >= img->style.size) {
+    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= img->style.size) {
         return false;
     }
 
     return amp_style_cell_serialize(
-        style, img->style.data + (size_t) cell_index * AMP_STYLE_CELL_SIZE,
-        AMP_STYLE_CELL_SIZE
+        style, img->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
+        AMP_CELL_STYLE_SIZE
     );
 }
 
 static inline const char *amp_get_glyph(
-    const struct amp_image_type *img, uint32_t x, uint32_t y
+    const struct amp_type *img, uint32_t x, uint32_t y
 ) {
     ssize_t cell_index = amp_get_cell_index(img, x, y);
 
@@ -266,20 +319,20 @@ static inline const char *amp_get_glyph(
         return nullptr;
     }
 
-    if ((size_t) cell_index * AMP_GLYPH_CELL_SIZE >= img->glyph.size) {
+    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= img->glyph.size) {
         return nullptr;
     }
 
     return (
         (const char *) img->glyph.data +
-        (size_t) cell_index * AMP_GLYPH_CELL_SIZE
+        (size_t) cell_index * AMP_CELL_GLYPH_SIZE
     );
 }
 
-static inline struct amp_style_cell_type amp_get_style(
-    const struct amp_image_type *img, uint32_t x, uint32_t y
+static inline struct amp_style_type amp_get_style(
+    const struct amp_type *img, uint32_t x, uint32_t y
 ) {
-    static const struct amp_style_cell_type broken_cell = {
+    static const struct amp_style_type broken_cell = {
         .bitset = { .broken = true }
     };
 
@@ -289,18 +342,18 @@ static inline struct amp_style_cell_type amp_get_style(
         return broken_cell;
     }
 
-    if ((size_t) cell_index * AMP_STYLE_CELL_SIZE >= img->style.size) {
+    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= img->style.size) {
         return broken_cell;
     }
 
     return amp_style_cell_deserialize(
-        img->style.data + (size_t) cell_index * AMP_STYLE_CELL_SIZE,
-        AMP_STYLE_CELL_SIZE
+        img->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
+        AMP_CELL_STYLE_SIZE
     );
 }
 
 static inline size_t amp_glyph_row_to_str(
-    const struct amp_image_type *img, uint32_t y, char *dst, size_t dst_sz
+    const struct amp_type *img, uint32_t y, char *dst, size_t dst_sz
 ) {
     size_t str_sz = 0;
 
@@ -336,7 +389,7 @@ static inline size_t amp_glyph_row_to_str(
 }
 
 static inline size_t amp_style_to_str(
-    struct amp_style_cell_type style, char *dst, size_t dst_sz
+    struct amp_style_type style, char *dst, size_t dst_sz
 ) {
     if (style.bitset.italic) {
         int ret = snprintf(dst, dst_sz, "%s", "\x1b[3m");
@@ -352,10 +405,10 @@ static inline size_t amp_style_to_str(
 }
 
 static inline size_t amp_row_to_str(
-    const struct amp_image_type *img, uint32_t y, char *dst, size_t dst_sz
+    const struct amp_type *img, uint32_t y, char *dst, size_t dst_sz
 ) {
     char style_str[256];
-    struct amp_style_cell_type style_state = {};
+    struct amp_style_type style_state = {};
     size_t str_sz = 0;
 
     for (uint32_t x = 0, w = img->width; x < w; ++x) {
@@ -410,10 +463,10 @@ static inline size_t amp_row_to_str(
     return ++str_sz;
 }
 
-static inline struct amp_style_cell_type amp_style_cell_deserialize(
+static inline struct amp_style_type amp_style_cell_deserialize(
     const uint8_t *data, size_t data_size
 ) {
-    return (struct amp_style_cell_type) {
+    return (struct amp_style_type) {
         .fg = {
             .r = data_size > 0 ? data[0] : 0,
             .g = data_size > 1 ? data[1] : 0,
@@ -433,15 +486,15 @@ static inline struct amp_style_cell_type amp_style_cell_deserialize(
             .underline      = data_size > 6 ? data[6] && (1 << 5) : 0,
             .blinking       = data_size > 6 ? data[6] && (1 << 6) : 0,
             .strikethrough  = data_size > 6 ? data[6] && (1 << 7) : 0,
-            .broken         = data_size < AMP_STYLE_CELL_SIZE
+            .broken         = data_size < AMP_CELL_STYLE_SIZE
         }
     };
 }
 
 static inline bool amp_style_cell_serialize(
-    struct amp_style_cell_type cell, uint8_t *dst, size_t dst_size
+    struct amp_style_type cell, uint8_t *dst, size_t dst_size
 ) {
-    if (dst_size < AMP_STYLE_CELL_SIZE) {
+    if (dst_size < AMP_CELL_STYLE_SIZE) {
         return false;
     }
 
