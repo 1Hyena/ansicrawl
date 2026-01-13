@@ -138,9 +138,9 @@ static inline bool                      amp_set_style(
 );
 
 static ssize_t                          amp_get_cell_index(
-    const struct amp_type *,
-    long x,
-    long y
+    const struct amp_type *                 amp,
+    long                                    x,
+    long                                    y
 );
 static int                              amp_utf8_code_point_size(
     const char *                            str,
