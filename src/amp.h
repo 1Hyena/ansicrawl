@@ -136,7 +136,7 @@ static inline bool                      amp_set_style(
     uint32_t                                y,
     struct amp_style_type                   style
 );
-static ssize_t                          amp_get_cell_index(
+static inline ssize_t                   amp_get_cell_index(
     const struct amp_type *                 amp,
     long                                    x,
     long                                    y
@@ -190,7 +190,7 @@ static inline void amp_clear(struct amp_type *img) {
     memset(img->style.data, 0, img->style.size);
 }
 
-static ssize_t amp_get_cell_index(
+static inline ssize_t amp_get_cell_index(
     const struct amp_type *img, long x, long y
 ) {
     if (x < 0 || y < 0 || x >= img->width || y >= img->height) {
