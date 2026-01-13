@@ -136,6 +136,12 @@ static inline bool                      amp_reset_style(
     uint32_t                                x,
     uint32_t                                y
 );
+static inline bool                      amp_set_color(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    AMP_COLOR                               color
+);
 static inline bool                      amp_set_background(
     struct amp_type *                       amp,
     uint32_t                                x,
@@ -741,6 +747,16 @@ static inline bool amp_reset_background(
     mode.bitset.bg = false;
 
     return amp_set_mode(amp, x, y, mode);
+}
+
+static inline bool amp_set_color(
+    struct amp_type *amp, uint32_t x, uint32_t y, AMP_COLOR color
+) {
+    return (
+        color == AMP_COLOR_NONE ? (
+            amp_reset_foreground(amp, x, y)
+        ) : amp_set_foreground(amp, x, y, amp_color_rgb(color))
+    );
 }
 
 static inline bool amp_set_foreground(

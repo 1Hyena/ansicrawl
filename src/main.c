@@ -20,7 +20,7 @@ static bool main_flush_outgoing();
 
 
 int main(int argc, char **argv) {
-    /*
+/*
     const char *locales[] = { "C.UTF8", "C.utf8", "en_US.UTF-8", "en_US.utf8" };
 
     for (size_t i=0; i<ARRAY_LENGTH(locales); ++i) {
@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     amp_set_style(&amp, 5, 5, AMP_ITALIC);
     amp_set_style(&amp, 6, 5, AMP_ITALIC|AMP_BLINKING);
     amp_set_style(&amp, 7, 5, AMP_ITALIC);
-    amp_set_foreground(&amp, 6, 4, amp_color_rgb(AMP_LIME));
+    amp_set_color(&amp, 6, 4, AMP_COLOR_NONE);
     amp_set_background(&amp, 6, 4, amp_color_rgb(AMP_NAVY));
 
     char buf[256];
@@ -59,7 +59,6 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 */
-
     main_init(argc, argv);
     main_loop();
     main_deinit();
