@@ -136,13 +136,12 @@ static inline bool                      amp_set_style(
     uint32_t                                y,
     struct amp_style_type                   style
 );
-
 static ssize_t                          amp_get_cell_index(
     const struct amp_type *                 amp,
     long                                    x,
     long                                    y
 );
-static int                              amp_utf8_code_point_size(
+static inline int                       amp_utf8_code_point_size(
     const char *                            str,
     size_t                                  str_sz
 );
@@ -201,7 +200,7 @@ static ssize_t amp_get_cell_index(
     return (y * img->width + x);
 }
 
-static int amp_utf8_code_point_size(const char *str, size_t n) {
+static inline int amp_utf8_code_point_size(const char *str, size_t n) {
     uint8_t *s = (uint8_t *) str;
 
     if (n > 0) {
