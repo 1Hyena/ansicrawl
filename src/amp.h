@@ -38,12 +38,12 @@
 
 struct amp_type;
 struct amp_rgb_type;
-struct amp_style_type;
+struct amp_mode_type;
 
 static constexpr size_t AMP_CELL_GLYPH_SIZE = 5; // 4 bytes for UTF8 + null byte
-static constexpr size_t AMP_CELL_STYLE_SIZE = 7;
+static constexpr size_t AMP_CELL_MODE_SIZE  = 7;
 static constexpr size_t AMP_CELL_SIZE       = (
-    AMP_CELL_GLYPH_SIZE + AMP_CELL_STYLE_SIZE
+    AMP_CELL_GLYPH_SIZE + AMP_CELL_MODE_SIZE
 );
 
 typedef enum : uint8_t {
@@ -56,6 +56,12 @@ typedef enum : uint8_t {
     ////////////////////////////////////////////////////////////////////////////
     AMP_MAX_COLOR
 } AMP_COLOR;
+
+typedef enum : uint8_t {
+    AMP_HIDDEN          = (1 << 0),     AMP_FAINT           = (1 << 1),
+    AMP_ITALIC          = (1 << 2),     AMP_UNDERLINE       = (1 << 3),
+    AMP_BLINKING        = (1 << 4),     AMP_STRIKETHROUGH   = (1 << 5)
+} AMP_STYLE;
 
 // Public API: /////////////////////////////////////////////////////////////////
 static inline size_t                    amp_init(
@@ -102,11 +108,33 @@ static inline const char *              amp_get_glyph(
     uint32_t                                x,
     uint32_t                                y
 );
+static inline AMP_STYLE                 amp_get_style(
+    const struct amp_type *                 amp,
+    uint32_t                                x,
+    uint32_t                                y
+);
 static inline bool                      amp_set_style(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
-    struct amp_style_type                   style
+    AMP_STYLE                               style
+);
+static inline bool                      amp_add_style(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    AMP_STYLE                               style
+);
+static inline bool                      amp_rem_style(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y,
+    AMP_STYLE                               style
+);
+static inline bool                      amp_reset_style(
+    struct amp_type *                       amp,
+    uint32_t                                x,
+    uint32_t                                y
 );
 static inline bool                      amp_set_background(
     struct amp_type *                       amp,
@@ -127,11 +155,6 @@ static inline bool                      amp_set_foreground(
 );
 static inline bool                      amp_reset_foreground(
     struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y
-);
-static inline struct amp_style_type     amp_get_style(
-    const struct amp_type *                 amp,
     uint32_t                                x,
     uint32_t                                y
 );
@@ -162,7 +185,7 @@ struct amp_type {
     struct {
         size_t size;
         uint8_t *data;
-    } style;
+    } mode;
 
     AMP_PALETTE palette;
 };
@@ -173,7 +196,7 @@ struct amp_rgb_type {
     uint8_t b;
 };
 
-struct amp_style_type {
+struct amp_mode_type {
     struct amp_rgb_type fg;
     struct amp_rgb_type bg;
 
@@ -421,11 +444,16 @@ static const struct amp_rgb16_type amp_rgb16_bg_table[] = {
 };
 
 // Private API: ////////////////////////////////////////////////////////////////
-static inline bool                      amp_set_style(
+static inline bool                      amp_set_mode(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
-    struct amp_style_type                   style
+    struct amp_mode_type                    mode
+);
+static inline struct amp_mode_type      amp_get_mode(
+    const struct amp_type *                 amp,
+    uint32_t                                x,
+    uint32_t                                y
 );
 static inline ssize_t                   amp_get_cell_index(
     const struct amp_type *                 amp,
@@ -436,25 +464,25 @@ static inline int                       amp_utf8_code_point_size(
     const char *                            utf8_str,
     size_t                                  utf8_str_size
 );
-static inline size_t                    amp_style_to_ans(
-    struct amp_style_type                   style,
+static inline size_t                    amp_mode_to_ans(
+    struct amp_mode_type                    mode,
     AMP_PALETTE                             palette,
     char *                                  ans_dst,
     size_t                                  ans_dst_size
 );
-static inline size_t                    amp_style_update_to_ans(
-    struct amp_style_type                   prev_style,
-    struct amp_style_type                   next_style,
+static inline size_t                    amp_mode_update_to_ans(
+    struct amp_mode_type                    prev_mode,
+    struct amp_mode_type                    next_mode,
     AMP_PALETTE                             palette,
     char *                                  ans_dst,
     size_t                                  ans_dst_size
 );
-static inline struct amp_style_type     amp_style_cell_deserialize(
+static inline struct amp_mode_type     amp_mode_cell_deserialize(
     const uint8_t *                         src,
     size_t                                  src_size
 );
-static inline bool                      amp_style_cell_serialize(
-    struct amp_style_type                   style,
+static inline bool                      amp_mode_cell_serialize(
+    struct amp_mode_type                    mode,
     uint8_t *                               dst,
     size_t                                  dst_size
 );
@@ -484,13 +512,13 @@ static inline size_t amp_init(
         AMP_CELL_SIZE
     );
     const size_t glyph_size = cell_count * AMP_CELL_GLYPH_SIZE;
-    const size_t style_size = cell_count * AMP_CELL_STYLE_SIZE;
+    const size_t mode_size = cell_count * AMP_CELL_MODE_SIZE;
 
     amp->glyph.data = (uint8_t *) buf;
     amp->glyph.size = glyph_size;
 
-    amp->style.data = (uint8_t *) buf + amp->glyph.size;
-    amp->style.size = style_size;
+    amp->mode.data = (uint8_t *) buf + amp->glyph.size;
+    amp->mode.size = mode_size;
 
     amp_clear(amp);
 
@@ -499,7 +527,7 @@ static inline size_t amp_init(
 
 static inline void amp_clear(struct amp_type *amp) {
     memset(amp->glyph.data, 0, amp->glyph.size);
-    memset(amp->style.data, 0, amp->style.size);
+    memset(amp->mode.data, 0, amp->mode.size);
 }
 
 static inline ssize_t amp_get_cell_index(
@@ -601,9 +629,9 @@ static inline const char *amp_set_glyph(
     return dst;
 }
 
-static inline bool amp_set_style(
+static inline bool amp_set_mode(
     struct amp_type *amp, uint32_t x, uint32_t y,
-    struct amp_style_type style
+    struct amp_mode_type mode
 ) {
     ssize_t cell_index = amp_get_cell_index(amp, x, y);
 
@@ -611,60 +639,131 @@ static inline bool amp_set_style(
         return false;
     }
 
-    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= amp->style.size) {
+    if ((size_t) cell_index * AMP_CELL_MODE_SIZE >= amp->mode.size) {
         return false;
     }
 
-    return amp_style_cell_serialize(
-        style, amp->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
-        AMP_CELL_STYLE_SIZE
+    return amp_mode_cell_serialize(
+        mode, amp->mode.data + (size_t) cell_index * AMP_CELL_MODE_SIZE,
+        AMP_CELL_MODE_SIZE
     );
+}
+
+static inline struct amp_mode_type amp_get_mode(
+    const struct amp_type *amp, uint32_t x, uint32_t y
+) {
+    static const struct amp_mode_type broken_cell = {
+        .bitset = { .broken = true }
+    };
+
+    ssize_t cell_index = amp_get_cell_index(amp, x, y);
+
+    if (cell_index < 0) {
+        return broken_cell;
+    }
+
+    if ((size_t) cell_index * AMP_CELL_MODE_SIZE >= amp->mode.size) {
+        return broken_cell;
+    }
+
+    return amp_mode_cell_deserialize(
+        amp->mode.data + (size_t) cell_index * AMP_CELL_MODE_SIZE,
+        AMP_CELL_MODE_SIZE
+    );
+}
+
+static inline AMP_STYLE amp_get_style(
+    const struct amp_type *amp, uint32_t x, uint32_t y
+) {
+    auto mode = amp_get_mode(amp, x, y);
+
+    return (
+        (mode.bitset.hidden         ? AMP_HIDDEN        : 0) |
+        (mode.bitset.faint          ? AMP_FAINT         : 0) |
+        (mode.bitset.italic         ? AMP_ITALIC        : 0) |
+        (mode.bitset.underline      ? AMP_UNDERLINE     : 0) |
+        (mode.bitset.blinking       ? AMP_BLINKING      : 0) |
+        (mode.bitset.strikethrough  ? AMP_STRIKETHROUGH : 0)
+    );
+}
+
+static inline bool amp_set_style(
+    struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
+) {
+    auto mode = amp_get_mode(amp, x, y);
+
+    mode.bitset.hidden          = style & AMP_HIDDEN;
+    mode.bitset.faint           = style & AMP_FAINT;
+    mode.bitset.italic          = style & AMP_ITALIC;
+    mode.bitset.underline       = style & AMP_UNDERLINE;
+    mode.bitset.blinking        = style & AMP_BLINKING;
+    mode.bitset.strikethrough   = style & AMP_STRIKETHROUGH;
+
+    return amp_set_mode(amp, x, y, mode);
+}
+
+static inline bool amp_add_style(
+    struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
+) {
+    return amp_set_style(amp, x, y, style | amp_get_style(amp, x, y));
+}
+
+static inline bool amp_rem_style(
+    struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
+) {
+    return amp_set_style(amp, x, y, amp_get_style(amp, x, y) & (~style));
+}
+
+static inline bool amp_reset_style(
+    struct amp_type *amp, uint32_t x, uint32_t y
+) {
+    return amp_set_style(amp, x, y, 0);
 }
 
 static inline bool amp_set_background(
     struct amp_type *amp, uint32_t x, uint32_t y, struct amp_rgb_type rgb
 ) {
-    struct amp_style_type style = amp_get_style(amp, x, y);
+    struct amp_mode_type mode = amp_get_mode(amp, x, y);
 
-    style.bg.r = rgb.r;
-    style.bg.g = rgb.g;
-    style.bg.b = rgb.b;
-    style.bitset.bg = true;
+    mode.bg.r = rgb.r;
+    mode.bg.g = rgb.g;
+    mode.bg.b = rgb.b;
+    mode.bitset.bg = true;
 
-    return amp_set_style(amp, x, y, style);
+    return amp_set_mode(amp, x, y, mode);
 }
 
 static inline bool amp_reset_background(
     struct amp_type *amp, uint32_t x, uint32_t y
 ) {
-    struct amp_style_type style = amp_get_style(amp, x, y);
+    struct amp_mode_type mode = amp_get_mode(amp, x, y);
 
-    style.bitset.bg = false;
+    mode.bitset.bg = false;
 
-    return amp_set_style(amp, x, y, style);
+    return amp_set_mode(amp, x, y, mode);
 }
 
 static inline bool amp_set_foreground(
     struct amp_type *amp, uint32_t x, uint32_t y, struct amp_rgb_type rgb
 ) {
-    struct amp_style_type style = amp_get_style(amp, x, y);
+    struct amp_mode_type mode = amp_get_mode(amp, x, y);
 
-    style.fg.r = rgb.r;
-    style.fg.g = rgb.g;
-    style.fg.b = rgb.b;
-    style.bitset.fg = true;
+    mode.fg.r = rgb.r;
+    mode.fg.g = rgb.g;
+    mode.fg.b = rgb.b;
+    mode.bitset.fg = true;
 
-    return amp_set_style(amp, x, y, style);
+    return amp_set_mode(amp, x, y, mode);
 }
 
 static inline bool amp_reset_foreground(
     struct amp_type *amp, uint32_t x, uint32_t y
 ) {
-    struct amp_style_type style = amp_get_style(amp, x, y);
+    struct amp_mode_type mode = amp_get_mode(amp, x, y);
 
-    style.bitset.fg = false;
+    mode.bitset.fg = false;
 
-    return amp_set_style(amp, x, y, style);
+    return amp_set_mode(amp, x, y, mode);
 }
 
 static inline struct amp_rgb_type amp_rgb(uint8_t r, uint8_t g, uint8_t b) {
@@ -687,29 +786,6 @@ static inline const char *amp_get_glyph(
     return (
         (const char *) amp->glyph.data +
         (size_t) cell_index * AMP_CELL_GLYPH_SIZE
-    );
-}
-
-static inline struct amp_style_type amp_get_style(
-    const struct amp_type *amp, uint32_t x, uint32_t y
-) {
-    static const struct amp_style_type broken_cell = {
-        .bitset = { .broken = true }
-    };
-
-    ssize_t cell_index = amp_get_cell_index(amp, x, y);
-
-    if (cell_index < 0) {
-        return broken_cell;
-    }
-
-    if ((size_t) cell_index * AMP_CELL_STYLE_SIZE >= amp->style.size) {
-        return broken_cell;
-    }
-
-    return amp_style_cell_deserialize(
-        amp->style.data + (size_t) cell_index * AMP_CELL_STYLE_SIZE,
-        AMP_CELL_STYLE_SIZE
     );
 }
 
@@ -764,21 +840,21 @@ static inline size_t amp_str_append(
     );
 }
 
-static inline size_t amp_style_to_ans(
-    struct amp_style_type style, AMP_PALETTE pal,
+static inline size_t amp_mode_to_ans(
+    struct amp_mode_type mode, AMP_PALETTE pal,
     char *ans_dst, size_t ans_dst_size
 ) {
     char ans[256];
     size_t ans_size = 0;
 
     const char *options[] = {
-        style.bitset.reset          ? "0" : nullptr,
-        style.bitset.hidden         ? "8" : nullptr,
-        style.bitset.faint          ? "2" : nullptr,
-        style.bitset.italic         ? "3" : nullptr,
-        style.bitset.underline      ? "4" : nullptr,
-        style.bitset.blinking       ? "5" : nullptr,
-        style.bitset.strikethrough  ? "9" : nullptr
+        mode.bitset.reset           ? "0" : nullptr,
+        mode.bitset.hidden          ? "8" : nullptr,
+        mode.bitset.faint           ? "2" : nullptr,
+        mode.bitset.italic          ? "3" : nullptr,
+        mode.bitset.underline       ? "4" : nullptr,
+        mode.bitset.blinking        ? "5" : nullptr,
+        mode.bitset.strikethrough   ? "9" : nullptr
     };
 
     for (size_t i=0; i<sizeof(options)/sizeof(options[0]); ++i) {
@@ -800,7 +876,7 @@ static inline size_t amp_style_to_ans(
     }
 
     if (pal == AMP_PAL_24BIT) {
-        if (style.bitset.fg) {
+        if (mode.bitset.fg) {
             ans_size += (
                 ans_size ? amp_str_append(
                     ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
@@ -813,7 +889,7 @@ static inline size_t amp_style_to_ans(
 
             ans_size += amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
-                amp_number_table[style.fg.r]
+                amp_number_table[mode.fg.r]
             );
 
             ans_size += (
@@ -824,7 +900,7 @@ static inline size_t amp_style_to_ans(
 
             ans_size += amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
-                amp_number_table[style.fg.g]
+                amp_number_table[mode.fg.g]
             );
 
             ans_size += (
@@ -835,11 +911,11 @@ static inline size_t amp_style_to_ans(
 
             ans_size += amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
-                amp_number_table[style.fg.b]
+                amp_number_table[mode.fg.b]
             );
         }
 
-        if (style.bitset.bg) {
+        if (mode.bitset.bg) {
             ans_size += (
                 ans_size ? amp_str_append(
                     ans + ans_size, amp_sub_size(sizeof(ans), ans_size), ";"
@@ -853,7 +929,7 @@ static inline size_t amp_style_to_ans(
 
             ans_size += amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
-                amp_number_table[style.bg.r]
+                amp_number_table[mode.bg.r]
             );
 
             ans_size += (
@@ -864,7 +940,7 @@ static inline size_t amp_style_to_ans(
 
             ans_size += amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
-                amp_number_table[style.bg.g]
+                amp_number_table[mode.bg.g]
             );
 
             ans_size += (
@@ -875,26 +951,26 @@ static inline size_t amp_style_to_ans(
 
             ans_size += amp_str_append(
                 ans + ans_size, amp_sub_size(sizeof(ans), ans_size),
-                amp_number_table[style.bg.b]
+                amp_number_table[mode.bg.b]
             );
         }
     }
     else {
-        if (style.bitset.bg) {
+        if (mode.bitset.bg) {
             auto bg_rgb_row = amp_find_rgb16(
                 amp_rgb16_bg_table, (struct amp_rgb_type) {
-                    .r = style.bg.r,
-                    .g = style.bg.g,
-                    .b = style.bg.b
+                    .r = mode.bg.r,
+                    .g = mode.bg.g,
+                    .b = mode.bg.b
                 }
             );
 
             if (bg_rgb_row.bright) {
-                struct amp_rgb_type buf = style.bg;
-                style.bg = style.fg;
-                style.fg = buf;
-                style.bitset.bg = style.bitset.fg;
-                style.bitset.fg = true;
+                struct amp_rgb_type buf = mode.bg;
+                mode.bg = mode.fg;
+                mode.fg = buf;
+                mode.bitset.bg = mode.bitset.fg;
+                mode.bitset.fg = true;
 
                 ans_size += (
                     ans_size ? amp_str_append(
@@ -908,12 +984,12 @@ static inline size_t amp_style_to_ans(
             }
         }
 
-        if (style.bitset.fg) {
+        if (mode.bitset.fg) {
             auto fg_rgb_row = amp_find_rgb16(
                 amp_rgb16_fg_table, (struct amp_rgb_type) {
-                    .r = style.fg.r,
-                    .g = style.fg.g,
-                    .b = style.fg.b
+                    .r = mode.fg.r,
+                    .g = mode.fg.g,
+                    .b = mode.fg.b
                 }
             );
 
@@ -941,12 +1017,12 @@ static inline size_t amp_style_to_ans(
             );
         }
 
-        if (style.bitset.bg) {
+        if (mode.bitset.bg) {
             auto bg_rgb_row = amp_find_rgb16(
                 amp_rgb16_bg_table, (struct amp_rgb_type) {
-                    .r = style.bg.r,
-                    .g = style.bg.g,
-                    .b = style.bg.b
+                    .r = mode.bg.r,
+                    .g = mode.bg.g,
+                    .b = mode.bg.b
                 }
             );
 
@@ -987,8 +1063,8 @@ static inline size_t amp_style_to_ans(
     return 0;
 }
 
-static inline size_t amp_style_update_to_ans(
-    struct amp_style_type prev, struct amp_style_type next, AMP_PALETTE pal,
+static inline size_t amp_mode_update_to_ans(
+    struct amp_mode_type prev, struct amp_mode_type next, AMP_PALETTE pal,
     char *ans_dst, size_t ans_dst_size
 ) {
     if ((prev.bitset.hidden         && !next.bitset.hidden)
@@ -999,18 +1075,18 @@ static inline size_t amp_style_update_to_ans(
     ||  (prev.bitset.strikethrough  && !next.bitset.strikethrough)
     ||  (prev.bitset.fg             && !next.bitset.fg)
     ||  (prev.bitset.bg             && !next.bitset.bg)) {
-        struct amp_style_type style = next;
+        struct amp_mode_type mode = next;
 
-        style.bitset.reset = true;
+        mode.bitset.reset = true;
 
-        return amp_style_to_ans(style, pal, ans_dst, ans_dst_size);
+        return amp_mode_to_ans(mode, pal, ans_dst, ans_dst_size);
     }
 
     char buf[256];
     char ans[256];
     size_t ans_size = 0;
 
-    const struct amp_style_type styles[] = {
+    const struct amp_mode_type modes[] = {
         {
             .bitset = {
                 .hidden = (
@@ -1067,8 +1143,8 @@ static inline size_t amp_style_update_to_ans(
         }
     };
 
-    for (size_t i=0; i<sizeof(styles)/sizeof(styles[0]); ++i) {
-        size_t buf_size = amp_style_to_ans(styles[i], pal, buf, sizeof(buf));
+    for (size_t i=0; i<sizeof(modes)/sizeof(modes[0]); ++i) {
+        size_t buf_size = amp_mode_to_ans(modes[i], pal, buf, sizeof(buf));
 
         if (buf_size > 3 && buf_size < sizeof(buf)) {
             buf[buf_size - 1] = '\0'; // delete the 'm' terminator
@@ -1118,24 +1194,24 @@ static inline size_t amp_row_cut_to_ans(
         width ? (x + width > amp_width ? amp_width : x + width) : amp_width
     );
 
-    char style_ans[256];
-    struct amp_style_type prev_style_state = {};
+    char mode_ans[256];
+    struct amp_mode_type prev_mode_state = {};
     size_t ans_size = 0;
 
     for (; x < end_x; ++x) {
-        struct amp_style_type next_style_state = amp_get_style(amp, x, y);
+        struct amp_mode_type next_mode_state = amp_get_mode(amp, x, y);
 
-        size_t style_ans_size = amp_style_update_to_ans(
-            prev_style_state, next_style_state, amp->palette,
-            style_ans, sizeof(style_ans)
+        size_t mode_ans_size = amp_mode_update_to_ans(
+            prev_mode_state, next_mode_state, amp->palette,
+            mode_ans, sizeof(mode_ans)
         );
 
-        prev_style_state = next_style_state;
+        prev_mode_state = next_mode_state;
 
-        if (style_ans_size) {
+        if (mode_ans_size) {
             ans_size += amp_str_append(
                 ans_dst + ans_size, amp_sub_size(ans_dst_size, ans_size),
-                style_ans
+                mode_ans
             );
         }
 
@@ -1210,10 +1286,10 @@ static inline size_t amp_to_ans(
     return ans_size;
 }
 
-static inline struct amp_style_type amp_style_cell_deserialize(
+static inline struct amp_mode_type amp_mode_cell_deserialize(
     const uint8_t *data, size_t data_size
 ) {
-    return (struct amp_style_type) {
+    return (struct amp_mode_type) {
         .fg = {
             .r = data_size > 0 ? data[0] : 0,
             .g = data_size > 1 ? data[1] : 0,
@@ -1233,15 +1309,15 @@ static inline struct amp_style_type amp_style_cell_deserialize(
             .underline      = data_size > 6 ? data[6] & (1 << 5) : 0,
             .blinking       = data_size > 6 ? data[6] & (1 << 6) : 0,
             .strikethrough  = data_size > 6 ? data[6] & (1 << 7) : 0,
-            .broken         = data_size < AMP_CELL_STYLE_SIZE
+            .broken         = data_size < AMP_CELL_MODE_SIZE
         }
     };
 }
 
-static inline bool amp_style_cell_serialize(
-    struct amp_style_type cell, uint8_t *dst, size_t dst_size
+static inline bool amp_mode_cell_serialize(
+    struct amp_mode_type cell, uint8_t *dst, size_t dst_size
 ) {
-    if (dst_size < AMP_CELL_STYLE_SIZE) {
+    if (dst_size < AMP_CELL_MODE_SIZE) {
         return false;
     }
 
