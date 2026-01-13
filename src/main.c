@@ -20,9 +20,17 @@ static bool main_flush_outgoing();
 
 
 int main(int argc, char **argv) {
-/*
+    /*
+    const char *locales[] = { "C.UTF8", "C.utf8", "en_US.UTF-8", "en_US.utf8" };
+
+    for (size_t i=0; i<ARRAY_LENGTH(locales); ++i) {
+        if (setlocale(LC_ALL, locales[i])) {
+            break;
+        }
+    }
+
     char img_data[2000];
-    struct amp_image_type amp = {
+    struct amp_type amp = {
         .width = 10,
         .height = 10
     };
@@ -33,28 +41,21 @@ int main(int argc, char **argv) {
 
     for (uint32_t y = 0; y < amp.height; ++y) {
         for (uint32_t x = 0; x < amp.width; ++x) {
-            amp_set_glyph(&amp, x, y, "ä");
+            amp_set_glyph(&amp, x, y, "X");
         }
     }
 
-    struct amp_style_cell_type style = {
-        .bitset = {
-            .italic = true
-        }
-    };
-
-    amp_set_style(&amp, 5, 5, style);
+    amp_set_style(&amp, 5, 5, AMP_ITALIC);
+    amp_set_style(&amp, 6, 5, AMP_ITALIC|AMP_BLINKING);
+    amp_set_style(&amp, 7, 5, AMP_ITALIC);
+    amp_set_foreground(&amp, 6, 4, amp_color_rgb(AMP_LIME));
+    amp_set_background(&amp, 6, 4, amp_color_rgb(AMP_NAVY));
 
     char buf[256];
 
-    main_init(argc, argv);
-
-    for (uint32_t y=0; y<amp.height; ++y) {
-        size_t sz=amp_row_to_str(&amp, y, buf, sizeof(buf));
-        LOG("%s (%lu)", buf, sz);
-    }
-
-    main_deinit();
+    size_t sz=amp_to_ans(&amp, buf, sizeof(buf));
+    //str_erase(buf, 27);
+    printf("\n%s\n%lu bytes\n", buf, sz);
 
     return EXIT_SUCCESS;
 */
