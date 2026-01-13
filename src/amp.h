@@ -52,17 +52,17 @@ static inline size_t                    amp_init(
 static inline void                      amp_clear(
     struct amp_type *                       amp
 );
-static inline size_t                    amp_row_to_str(
+static inline size_t                    amp_row_to_ans(
     const struct amp_type *                 amp,
     uint32_t                                y,
-    char *                                  dst,
-    size_t                                  dst_size
+    char *                                  ans_dst,
+    size_t                                  ans_dst_size
 );
 static inline size_t                    amp_glyph_row_to_str(
     const struct amp_type *                 amp,
     uint32_t                                y,
-    char *                                  dst,
-    size_t                                  dst_size
+    char *                                  str_dst,
+    size_t                                  str_dst_size
 );
 static inline const char *              amp_set_glyph(
     struct amp_type *                       amp,
@@ -142,13 +142,13 @@ static inline ssize_t                   amp_get_cell_index(
     long                                    y
 );
 static inline int                       amp_utf8_code_point_size(
-    const char *                            str,
-    size_t                                  str_sz
+    const char *                            utf8_str,
+    size_t                                  utf8_str_sz
 );
-static inline size_t                    amp_style_to_str(
+static inline size_t                    amp_style_to_ans(
     struct amp_style_type                   style,
-    char *                                  dst,
-    size_t                                  dst_sz
+    char *                                  ans_dst,
+    size_t                                  ans_dst_sz
 );
 static inline struct amp_style_type     amp_style_cell_deserialize(
     const uint8_t *                         src,
@@ -387,7 +387,7 @@ static inline size_t amp_glyph_row_to_str(
     return ++str_sz;
 }
 
-static inline size_t amp_style_to_str(
+static inline size_t amp_style_to_ans(
     struct amp_style_type style, char *dst, size_t dst_sz
 ) {
     if (style.bitset.italic) {
@@ -403,7 +403,7 @@ static inline size_t amp_style_to_str(
     return 0;
 }
 
-static inline size_t amp_row_to_str(
+static inline size_t amp_row_to_ans(
     const struct amp_type *img, uint32_t y, char *dst, size_t dst_sz
 ) {
     char style_str[256];
@@ -413,7 +413,7 @@ static inline size_t amp_row_to_str(
     for (uint32_t x = 0, w = img->width; x < w; ++x) {
         style_state = amp_get_style(img, x, y);
 
-        size_t size = amp_style_to_str(
+        size_t size = amp_style_to_ans(
             style_state, style_str, sizeof(style_str)
         );
 
