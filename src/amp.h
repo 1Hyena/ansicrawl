@@ -96,6 +96,12 @@ typedef enum : uint8_t {
     AMP_PAL_24BIT
 } AMP_PALETTE;
 
+typedef enum : uint8_t {
+    AMP_ALIGN_LEFT = 0,
+    AMP_ALIGN_CENTER,
+    AMP_ALIGN_RIGHT
+} AMP_ALIGN;
+
 // Public API: /////////////////////////////////////////////////////////////////
 static inline size_t                    amp_init(
     struct amp_type *                       amp,
@@ -104,6 +110,25 @@ static inline size_t                    amp_init(
 );
 static inline void                      amp_clear(
     struct amp_type *                       amp
+);
+static inline void                      amp_set_palette(
+    struct amp_type *                       amp,
+    AMP_PALETTE                             palette
+);
+static inline void                      amp_draw_glyph(
+    struct amp_type *                       amp,
+    AMP_STYLE                               glyph_style,
+    long                                    glyph_x,
+    long                                    glyph_y,
+    const char *                            glyph_str
+);
+static inline void                      amp_draw_text(
+    struct amp_type *                       amp,
+    AMP_STYLE                               text_style,
+    long                                    text_x,
+    long                                    text_y,
+    AMP_ALIGN                               text_alignment,
+    const char *                            text_str
 );
 static inline size_t                    amp_to_ans(
     const struct amp_type *                 amp,
@@ -132,9 +157,9 @@ static inline size_t                    amp_glyph_row_to_str(
 );
 static inline const char *              amp_put_glyph(
     struct amp_type *                       amp,
+    const char *                            glyph,
     uint32_t                                x,
-    uint32_t                                y,
-    const char *                            glyph
+    uint32_t                                y
 );
 static inline const char *              amp_get_glyph(
     const struct amp_type *                 amp,
@@ -148,9 +173,9 @@ static inline AMP_STYLE                 amp_get_style(
 );
 static inline bool                      amp_put_style(
     struct amp_type *                       amp,
+    AMP_STYLE                               style,
     uint32_t                                x,
-    uint32_t                                y,
-    AMP_STYLE                               style
+    uint32_t                                y
 );
 static inline struct amp_color_type     amp_map_rgb(
     uint8_t                                 r,
@@ -165,10 +190,6 @@ static inline void                      amp_unmap_rgb(
 );
 static inline struct amp_color_type     amp_lookup_color(
     AMP_COLOR                               index
-);
-static inline void                      amp_set_palette(
-    struct amp_type *                       amp,
-    AMP_PALETTE                             palette
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -710,8 +731,27 @@ static inline int amp_utf8_code_point_size(const char *str, size_t n) {
     return -1; // invalid or incomplete multibyte character
 }
 
+static inline const char *amp_get_glyph(
+    const struct amp_type *amp, uint32_t x, uint32_t y
+) {
+    ssize_t cell_index = amp_get_cell_index(amp, x, y);
+
+    if (cell_index < 0) {
+        return nullptr;
+    }
+
+    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= amp->glyph.size) {
+        return nullptr;
+    }
+
+    return (
+        (const char *) amp->glyph.data +
+        (size_t) cell_index * AMP_CELL_GLYPH_SIZE
+    );
+}
+
 static inline const char *amp_put_glyph(
-    struct amp_type *amp, uint32_t x, uint32_t y, const char *glyph
+    struct amp_type *amp, const char *glyph, uint32_t x, uint32_t y
 ) {
     ssize_t cell_index = amp_get_cell_index(amp, x, y);
 
@@ -817,7 +857,7 @@ static inline AMP_STYLE amp_get_style(
 }
 
 static inline bool amp_put_style(
-    struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
+    struct amp_type *amp, AMP_STYLE style, uint32_t x, uint32_t y
 ) {
     auto mode = amp_get_mode(amp, x, y);
 
@@ -913,23 +953,81 @@ static inline bool amp_put_style(
     return amp_set_mode(amp, x, y, mode);
 }
 
-static inline const char *amp_get_glyph(
-    const struct amp_type *amp, uint32_t x, uint32_t y
+static inline void amp_draw_glyph(
+    struct amp_type *amp, AMP_STYLE style, long x, long y, const char *glyph_str
 ) {
-    ssize_t cell_index = amp_get_cell_index(amp, x, y);
-
-    if (cell_index < 0) {
-        return nullptr;
+    if (x < 0 || x >= amp->width || y < 0 || y >= amp->height
+    ||  x > UINT32_MAX || y > UINT32_MAX) {
+        return;
     }
 
-    if ((size_t) cell_index * AMP_CELL_GLYPH_SIZE >= amp->glyph.size) {
-        return nullptr;
+    char glyph[AMP_CELL_GLYPH_SIZE] = {};
+    size_t glyph_size = 0;
+
+    for (const char *c = glyph_str; *c; ++c) {
+        if (++glyph_size >= sizeof(glyph)) {
+            break;
+        }
     }
 
-    return (
-        (const char *) amp->glyph.data +
-        (size_t) cell_index * AMP_CELL_GLYPH_SIZE
-    );
+    int cpsz = amp_utf8_code_point_size(glyph_str, glyph_size);
+
+    if (cpsz < 0 || cpsz >= (int) sizeof(glyph)) {
+        return;
+    }
+
+    memcpy(glyph, glyph_str, (size_t) cpsz);
+    amp_put_glyph(amp, glyph, (uint32_t) x, (uint32_t) y);
+}
+
+static inline void amp_draw_text(
+    struct amp_type *amp, AMP_STYLE style, long x, long y, AMP_ALIGN align,
+    const char *text
+) {
+    if (y < 0 || y >= amp->height || y > UINT32_MAX) {
+        return;
+    }
+
+    const size_t text_size = strlen(text);
+    uint32_t text_width = 0;
+
+    for (const char *s = text; *s;) {
+        int cpsz = amp_utf8_code_point_size(
+            s, amp_sub_size(text_size, (size_t) (s - text))
+        );
+
+        if (cpsz < 0) {
+            break;
+        }
+
+        ++text_width;
+        s += cpsz;
+    }
+
+    if (align == AMP_ALIGN_RIGHT) {
+        x -= text_width;
+    }
+    else if (align == AMP_ALIGN_CENTER) {
+        x -= text_width / 2;
+    }
+
+    for (const char *s = text; *s;) {
+        int cpsz = amp_utf8_code_point_size(
+            s, amp_sub_size(text_size, (size_t) (s - text))
+        );
+
+        if (cpsz < 0) {
+            break;
+        }
+
+        amp_draw_glyph(amp, style, x, y, s);
+
+        if (++x >= amp->width) {
+            break;
+        }
+
+        s += cpsz;
+    }
 }
 
 static inline size_t amp_glyph_row_to_str(
