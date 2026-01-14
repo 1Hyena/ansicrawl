@@ -203,12 +203,6 @@ static inline bool                      amp_reset_style(
     uint32_t                                x,
     uint32_t                                y
 );
-static inline bool                      amp_set_color(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y,
-    AMP_COLOR                               color
-);
 static inline bool                      amp_set_background(
     struct amp_type *                       amp,
     uint32_t                                x,
@@ -577,9 +571,6 @@ static inline struct amp_rgb16_type     amp_find_rgb16(
     const struct amp_rgb16_type *           table,
     struct amp_color_type                   color
 );
-static inline struct amp_color_type     amp_lookup_rgb16_fg_by_index(
-    AMP_COLOR                               index
-);
 ////////////////////////////////////////////////////////////////////////////////
 
 static inline size_t amp_init(
@@ -820,18 +811,6 @@ static inline bool amp_reset_background(
     mode.bitset.bg = false;
 
     return amp_set_mode(amp, x, y, mode);
-}
-
-static inline bool amp_set_color(
-    struct amp_type *amp, uint32_t x, uint32_t y, AMP_COLOR index
-) {
-    return (
-        index == AMP_COLOR_NONE ? (
-            amp_reset_foreground(amp, x, y)
-        ) : amp_set_foreground(
-            amp, x, y, amp_lookup_rgb16_fg_by_index(index)
-        )
-    );
 }
 
 static inline bool amp_set_foreground(
@@ -1450,16 +1429,6 @@ static inline struct amp_rgb16_type amp_find_rgb16(
     }
 
     return *best_row;
-}
-
-static inline struct amp_color_type amp_lookup_rgb16_fg_by_index(
-    AMP_COLOR index
-) {
-    return (
-        index < AMP_MAX_COLOR ? (
-            amp_rgb16_fg_table[index].color
-        ) : amp_rgb16_fg_table[AMP_COLOR_NONE].color
-    );
 }
 
 static inline struct amp_color_type amp_lookup_color(AMP_COLOR index) {
