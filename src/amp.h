@@ -37,7 +37,7 @@
 
 
 struct amp_type;
-struct amp_rgb_type;
+struct amp_color_type;
 struct amp_mode_type;
 
 static constexpr size_t AMP_CELL_GLYPH_SIZE = 5; // 4 bytes for UTF8 + null byte
@@ -56,6 +56,73 @@ typedef enum : uint8_t {
     ////////////////////////////////////////////////////////////////////////////
     AMP_MAX_COLOR
 } AMP_COLOR;
+
+struct amp_color_type {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
+
+static const struct {
+    AMP_COLOR               index;
+    struct amp_color_type   color;
+} amp_color_table[] = {
+    [AMP_COLOR_NONE] = {
+        .index  = AMP_COLOR_NONE,
+        .color  = {}
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_BLACK] = {
+        .index  = AMP_BLACK,    .color  = { .r  = 0,    .g  = 0,    .b  = 0   }
+    },
+    [AMP_MAROON] = {
+        .index  = AMP_MAROON,   .color  = { .r  = 128,  .g  = 0,    .b  = 0   }
+    },
+    [AMP_GREEN] = {
+        .index  = AMP_GREEN,    .color  = { .r  = 0,    .g  = 128,  .b  = 0   }
+    },
+    [AMP_OLIVE] = {
+        .index  = AMP_OLIVE,    .color  = { .r  = 128,  .g  = 128,  .b  = 0   }
+    },
+    [AMP_NAVY] = {
+        .index  = AMP_NAVY,     .color  = { .r  = 0,    .g  = 0,    .b  = 128 }
+    },
+    [AMP_PURPLE] = {
+        .index  = AMP_PURPLE,   .color  = { .r  = 128,  .g  = 0,    .b  = 128 }
+    },
+    [AMP_TEAL] = {
+        .index  = AMP_TEAL,     .color  = { .r  = 0,    .g  = 128,  .b  = 128 }
+    },
+    [AMP_SILVER] = {
+        .index  = AMP_SILVER,   .color  = { .r  = 128,  .g  = 128,  .b  = 128 }
+    },
+    [AMP_GRAY] = {
+        .index  = AMP_GRAY,     .color  = { .r  = 64,   .g  = 64,   .b  = 64  }
+    },
+    [AMP_RED] = {
+        .index  = AMP_RED,      .color  = { .r  = 255,  .g  = 0,    .b  = 0   }
+    },
+    [AMP_LIME] = {
+        .index  = AMP_LIME,     .color  = { .r  = 0,    .g  = 255,  .b  = 0   }
+    },
+    [AMP_YELLOW] = {
+        .index  = AMP_YELLOW,   .color  = { .r  = 255,  .g  = 255,  .b  = 0   }
+    },
+    [AMP_BLUE] = {
+        .index  = AMP_BLUE,     .color  = { .r  = 0,    .g  = 0,    .b  = 255 }
+    },
+    [AMP_MAGENTA] = {
+        .index  = AMP_MAGENTA,  .color  = { .r  = 255,  .g  = 0,    .b  = 255 }
+    },
+    [AMP_CYAN] = {
+        .index  = AMP_CYAN,     .color  = { .r  = 0,    .g  = 255,  .b  = 255 }
+    },
+    [AMP_WHITE] = {
+        .index  = AMP_WHITE,    .color  = { .r  = 255,  .g  = 255,  .b  = 255 }
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_MAX_COLOR] = {}
+};
 
 typedef enum : uint8_t {
     AMP_HIDDEN          = (1 << 0),     AMP_FAINT           = (1 << 1),
@@ -146,7 +213,7 @@ static inline bool                      amp_set_background(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
-    struct amp_rgb_type                     rgb
+    struct amp_color_type                   color
 );
 static inline bool                      amp_reset_background(
     struct amp_type *                       amp,
@@ -157,20 +224,26 @@ static inline bool                      amp_set_foreground(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
-    struct amp_rgb_type                     rgb
+    struct amp_color_type                   color
 );
 static inline bool                      amp_reset_foreground(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y
 );
-static inline struct amp_rgb_type       amp_rgb(
+static inline struct amp_color_type     amp_map_rgb(
     uint8_t                                 r,
     uint8_t                                 g,
     uint8_t                                 b
 );
-static inline struct amp_rgb_type       amp_color_rgb(
-    AMP_COLOR                               color
+static inline void                      amp_unmap_rgb(
+    struct amp_color_type                   color,
+    uint8_t *                               r,
+    uint8_t *                               g,
+    uint8_t *                               b
+);
+static inline struct amp_color_type     amp_lookup_color(
+    AMP_COLOR                               index
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -191,20 +264,18 @@ struct amp_type {
     struct {
         size_t size;
         uint8_t *data;
+
+        AMP_COLOR foreground;
+        AMP_COLOR background;
+        AMP_STYLE decoration;
     } mode;
 
     AMP_PALETTE palette;
 };
 
-struct amp_rgb_type {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-};
-
 struct amp_mode_type {
-    struct amp_rgb_type fg;
-    struct amp_rgb_type bg;
+    struct amp_color_type fg;
+    struct amp_color_type bg;
 
     struct {
         bool fg:1;
@@ -249,102 +320,103 @@ static const char *amp_number_table[] = {
 };
 
 static const struct amp_rgb16_type {
-    const char *        code;
-    struct amp_rgb_type rgb;
-    AMP_COLOR           index;
-    bool                bright:1;
+    const char *            code;
+    struct amp_color_type   color;
+    AMP_COLOR               index;
+    bool                    bright:1;
 } amp_rgb16_fg_table[] = {
     [AMP_COLOR_NONE] = {
         .index  = AMP_COLOR_NONE,
-        .code   = ""
+        .code   = "",
+        .color  = amp_color_table[AMP_COLOR_NONE].color
     },
     ////////////////////////////////////////////////////////////////////////////
     [AMP_BLACK] = {
         .index  = AMP_BLACK,
         .code   = "30",
-        .rgb    = { .r  = 0,    .g  = 0,    .b  = 0     }
+        .color  = amp_color_table[AMP_BLACK].color
     },
     [AMP_MAROON] = {
         .index  = AMP_MAROON,
         .code   = "31",
-        .rgb    = { .r  = 128,  .g  = 0,    .b  = 0     }
+        .color  = amp_color_table[AMP_MAROON].color
     },
     [AMP_GREEN] = {
         .index  = AMP_GREEN,
         .code   = "32",
-        .rgb    = { .r  = 0,    .g  = 128,  .b  = 0     }
+        .color  = amp_color_table[AMP_GREEN].color
     },
     [AMP_OLIVE] = {
         .index  = AMP_OLIVE,
         .code   = "33",
-        .rgb    = { .r  = 128,  .g  = 128,  .b  = 0     }
+        .color  = amp_color_table[AMP_OLIVE].color
     },
     [AMP_NAVY] = {
         .index  = AMP_NAVY,
         .code   = "34",
-        .rgb    = { .r  = 0,    .g  = 0,    .b  = 128   }
+        .color  = amp_color_table[AMP_NAVY].color
     },
     [AMP_PURPLE] = {
         .index  = AMP_PURPLE,
         .code   = "35",
-        .rgb    = { .r  = 128,  .g  = 0,    .b  = 128   }
+        .color  = amp_color_table[AMP_PURPLE].color
     },
     [AMP_TEAL] = {
         .index  = AMP_TEAL,
         .code   = "36",
-        .rgb    = { .r  = 0,    .g  = 128,  .b  = 128   }
+        .color  = amp_color_table[AMP_TEAL].color
     },
     [AMP_SILVER] = {
         .index  = AMP_SILVER,
         .code   = "37",
-        .rgb    = { .r  = 128,  .g  = 128,  .b  = 128   }
+        .color  = amp_color_table[AMP_SILVER].color
     },
     [AMP_GRAY] = {
         .index  = AMP_GRAY,
         .code   = "30",
-        .rgb    = { .r  = 64,   .g  = 64,   .b  = 64    },
+        .color  = amp_color_table[AMP_GRAY].color,
         .bright = true
     },
     [AMP_RED] = {
         .index  = AMP_RED,
         .code   = "31",
-        .rgb    = { .r  = 255,  .g  = 0,    .b  = 0     },
+        .color  = amp_color_table[AMP_RED].color,
         .bright = true
     },
     [AMP_LIME] = {
         .index  = AMP_LIME,
         .code   = "32",
-        .rgb    = { .r  = 0,    .g  = 255,  .b  = 0     },
+        .color  = amp_color_table[AMP_LIME].color,
         .bright = true
     },
     [AMP_YELLOW] = {
         .index  = AMP_YELLOW,
         .code   = "33",
-        .rgb    = { .r  = 255,  .g  = 255,  .b  = 0     },
+        .color  = amp_color_table[AMP_YELLOW].color,
         .bright = true
     },
     [AMP_BLUE] = {
         .index  = AMP_BLUE,
         .code   = "34",
-        .rgb    = { .r  = 0,    .g  = 0,    .b  = 255   },
+        .color  = amp_color_table[AMP_BLUE].color,
         .bright = true
     },
     [AMP_MAGENTA] = {
         .index  = AMP_MAGENTA,
         .code   = "35",
-        .rgb    = { .r  = 255,  .g  = 0,    .b  = 255   },
+        .color  = amp_color_table[AMP_MAGENTA].color,
         .bright = true
     },
     [AMP_CYAN] = {
         .index  = AMP_CYAN,
         .code   = "36",
-        .rgb    = { .r  = 0,    .g  = 255,  .b  = 255   },
+        .color  = amp_color_table[AMP_CYAN].color,
         .bright = true
     },
     [AMP_WHITE] = {
         .index  = AMP_WHITE,
         .code   = "37",
-        .rgb    = { .r  = 255,  .g  = 255,  .b  = 255   },
+        .color  = amp_color_table[AMP_WHITE].color,
         .bright = true
     },
     ////////////////////////////////////////////////////////////////////////////
@@ -360,89 +432,89 @@ static const struct amp_rgb16_type amp_rgb16_bg_table[] = {
     [AMP_BLACK] = {
         .index  = AMP_BLACK,
         .code   = "40",
-        .rgb    = { .r  = 0,    .g  = 0,    .b  = 0     }
+        .color  = amp_color_table[AMP_BLACK].color
     },
     [AMP_MAROON] = {
         .index  = AMP_MAROON,
         .code   = "41",
-        .rgb    = { .r  = 128,  .g  = 0,    .b  = 0     }
+        .color  = amp_color_table[AMP_MAROON].color
     },
     [AMP_GREEN] = {
         .index  = AMP_GREEN,
         .code   = "42",
-        .rgb    = { .r  = 0,    .g  = 128,  .b  = 0     }
+        .color  = amp_color_table[AMP_GREEN].color
     },
     [AMP_OLIVE] = {
         .index  = AMP_OLIVE,
         .code   = "43",
-        .rgb    = { .r  = 128,  .g  = 128,  .b  = 0     }
+        .color  = amp_color_table[AMP_OLIVE].color
     },
     [AMP_NAVY] = {
         .index  = AMP_NAVY,
         .code   = "44",
-        .rgb    = { .r  = 0,    .g  = 0,    .b  = 128   }
+        .color  = amp_color_table[AMP_NAVY].color
     },
     [AMP_PURPLE] = {
         .index  = AMP_PURPLE,
         .code   = "45",
-        .rgb    = { .r  = 128,  .g  = 0,    .b  = 128   }
+        .color  = amp_color_table[AMP_PURPLE].color
     },
     [AMP_TEAL] = {
         .index  = AMP_TEAL,
         .code   = "46",
-        .rgb    = { .r  = 0,    .g  = 128,  .b  = 128   }
+        .color  = amp_color_table[AMP_TEAL].color
     },
     [AMP_SILVER] = {
         .index  = AMP_SILVER,
         .code   = "47",
-        .rgb    = { .r  = 128,  .g  = 128,  .b  = 128   }
+        .color  = amp_color_table[AMP_SILVER].color
     },
     [AMP_GRAY] = {
         .index  = AMP_GRAY,
         .code   = "40",
-        .rgb    = { .r  = 64,   .g  = 64,   .b  = 64    },
+        .color  = amp_color_table[AMP_GRAY].color,
         .bright = true
     },
     [AMP_RED] = {
         .index  = AMP_RED,
         .code   = "41",
-        .rgb    = { .r  = 255,  .g  = 0,    .b  = 0     },
+        .color  = amp_color_table[AMP_RED].color,
         .bright = true
     },
     [AMP_LIME] = {
         .index  = AMP_LIME,
         .code   = "42",
-        .rgb    = { .r  = 0,    .g  = 255,  .b  = 0     },
+        .color  = amp_color_table[AMP_LIME].color,
         .bright = true
     },
     [AMP_YELLOW] = {
         .index  = AMP_YELLOW,
         .code   = "43",
-        .rgb    = { .r  = 255,  .g  = 255,  .b  = 0     },
+        .color  = amp_color_table[AMP_YELLOW].color,
         .bright = true
     },
     [AMP_BLUE] = {
         .index  = AMP_BLUE,
         .code   = "44",
-        .rgb    = { .r  = 0,    .g  = 0,    .b  = 255   },
+        .color  = amp_color_table[AMP_BLUE].color,
         .bright = true
     },
     [AMP_MAGENTA] = {
         .index  = AMP_MAGENTA,
         .code   = "45",
-        .rgb    = { .r  = 255,  .g  = 0,    .b  = 255   },
+        .color  = amp_color_table[AMP_MAGENTA].color,
         .bright = true
     },
     [AMP_CYAN] = {
         .index  = AMP_CYAN,
         .code   = "46",
-        .rgb    = { .r  = 0,    .g  = 255,  .b  = 255   },
+        .color  = amp_color_table[AMP_CYAN].color,
         .bright = true
     },
     [AMP_WHITE] = {
         .index  = AMP_WHITE,
         .code   = "47",
-        .rgb    = { .r  = 255,  .g  = 255,  .b  = 255   },
+        .color  = amp_color_table[AMP_WHITE].color,
         .bright = true
     },
     ////////////////////////////////////////////////////////////////////////////
@@ -503,7 +575,10 @@ static inline size_t                    amp_str_append(
 );
 static inline struct amp_rgb16_type     amp_find_rgb16(
     const struct amp_rgb16_type *           table,
-    struct amp_rgb_type                     rgb
+    struct amp_color_type                   color
+);
+static inline struct amp_color_type     amp_lookup_rgb16_fg_by_index(
+    AMP_COLOR                               index
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -727,13 +802,11 @@ static inline bool amp_reset_style(
 }
 
 static inline bool amp_set_background(
-    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_rgb_type rgb
+    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_color_type color
 ) {
     struct amp_mode_type mode = amp_get_mode(amp, x, y);
 
-    mode.bg.r = rgb.r;
-    mode.bg.g = rgb.g;
-    mode.bg.b = rgb.b;
+    mode.bg = color;
     mode.bitset.bg = true;
 
     return amp_set_mode(amp, x, y, mode);
@@ -750,23 +823,23 @@ static inline bool amp_reset_background(
 }
 
 static inline bool amp_set_color(
-    struct amp_type *amp, uint32_t x, uint32_t y, AMP_COLOR color
+    struct amp_type *amp, uint32_t x, uint32_t y, AMP_COLOR index
 ) {
     return (
-        color == AMP_COLOR_NONE ? (
+        index == AMP_COLOR_NONE ? (
             amp_reset_foreground(amp, x, y)
-        ) : amp_set_foreground(amp, x, y, amp_color_rgb(color))
+        ) : amp_set_foreground(
+            amp, x, y, amp_lookup_rgb16_fg_by_index(index)
+        )
     );
 }
 
 static inline bool amp_set_foreground(
-    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_rgb_type rgb
+    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_color_type color
 ) {
     struct amp_mode_type mode = amp_get_mode(amp, x, y);
 
-    mode.fg.r = rgb.r;
-    mode.fg.g = rgb.g;
-    mode.fg.b = rgb.b;
+    mode.fg = color;
     mode.bitset.fg = true;
 
     return amp_set_mode(amp, x, y, mode);
@@ -782,8 +855,18 @@ static inline bool amp_reset_foreground(
     return amp_set_mode(amp, x, y, mode);
 }
 
-static inline struct amp_rgb_type amp_rgb(uint8_t r, uint8_t g, uint8_t b) {
-    return (struct amp_rgb_type) { .r = r, .g = g, .b = b };
+static inline struct amp_color_type amp_map_rgb(
+    uint8_t r, uint8_t g, uint8_t b
+) {
+    return (struct amp_color_type) { .r = r, .g = g, .b = b };
+}
+
+static inline void amp_unmap_rgb(
+    struct amp_color_type color, uint8_t * r, uint8_t * g, uint8_t * b
+) {
+    *r = color.r;
+    *g = color.g;
+    *b = color.b;
 }
 
 static inline const char *amp_get_glyph(
@@ -973,16 +1056,10 @@ static inline size_t amp_mode_to_ans(
     }
     else {
         if (mode.bitset.bg) {
-            auto bg_rgb_row = amp_find_rgb16(
-                amp_rgb16_bg_table, (struct amp_rgb_type) {
-                    .r = mode.bg.r,
-                    .g = mode.bg.g,
-                    .b = mode.bg.b
-                }
-            );
+            auto bg_rgb_row = amp_find_rgb16(amp_rgb16_bg_table, mode.bg);
 
             if (bg_rgb_row.bright) {
-                struct amp_rgb_type buf = mode.bg;
+                struct amp_color_type buf = mode.bg;
                 mode.bg = mode.fg;
                 mode.fg = buf;
                 mode.bitset.bg = mode.bitset.fg;
@@ -1001,13 +1078,7 @@ static inline size_t amp_mode_to_ans(
         }
 
         if (mode.bitset.fg) {
-            auto fg_rgb_row = amp_find_rgb16(
-                amp_rgb16_fg_table, (struct amp_rgb_type) {
-                    .r = mode.fg.r,
-                    .g = mode.fg.g,
-                    .b = mode.fg.b
-                }
-            );
+            auto fg_rgb_row = amp_find_rgb16(amp_rgb16_fg_table, mode.fg);
 
             if (fg_rgb_row.bright) {
                 ans_size += (
@@ -1034,13 +1105,7 @@ static inline size_t amp_mode_to_ans(
         }
 
         if (mode.bitset.bg) {
-            auto bg_rgb_row = amp_find_rgb16(
-                amp_rgb16_bg_table, (struct amp_rgb_type) {
-                    .r = mode.bg.r,
-                    .g = mode.bg.g,
-                    .b = mode.bg.b
-                }
-            );
+            auto bg_rgb_row = amp_find_rgb16(amp_rgb16_bg_table, mode.bg);
 
             ans_size += (
                 ans_size ? amp_str_append(
@@ -1358,7 +1423,7 @@ static inline bool amp_mode_cell_serialize(
 }
 
 static inline struct amp_rgb16_type amp_find_rgb16(
-    const struct amp_rgb16_type *table, struct amp_rgb_type rgb
+    const struct amp_rgb16_type *table, struct amp_color_type color
 ) {
     long best_d = LONG_MAX;
     const struct amp_rgb16_type *best_row = nullptr;
@@ -1368,13 +1433,13 @@ static inline struct amp_rgb16_type amp_find_rgb16(
             continue;
         }
 
-        long dr = rgb.r;
-        long dg = rgb.g;
-        long db = rgb.b;
+        long dr = color.r;
+        long dg = color.g;
+        long db = color.b;
 
-         dr -= table->rgb.r;
-         dg -= table->rgb.g;
-         db -= table->rgb.b;
+         dr -= table->color.r;
+         dg -= table->color.g;
+         db -= table->color.b;
 
          long d = dr * dr + dg * dg + db * db;
 
@@ -1387,11 +1452,21 @@ static inline struct amp_rgb16_type amp_find_rgb16(
     return *best_row;
 }
 
-static inline struct amp_rgb_type amp_color_rgb(AMP_COLOR color) {
+static inline struct amp_color_type amp_lookup_rgb16_fg_by_index(
+    AMP_COLOR index
+) {
     return (
-        color < AMP_MAX_COLOR ? (
-            amp_rgb16_fg_table[color].rgb
-        ) : amp_rgb16_fg_table[AMP_COLOR_NONE].rgb
+        index < AMP_MAX_COLOR ? (
+            amp_rgb16_fg_table[index].color
+        ) : amp_rgb16_fg_table[AMP_COLOR_NONE].color
+    );
+}
+
+static inline struct amp_color_type amp_lookup_color(AMP_COLOR index) {
+    return (
+        index < AMP_MAX_COLOR ? (
+            amp_color_table[index].color
+        ) : amp_color_table[AMP_COLOR_NONE].color
     );
 }
 
