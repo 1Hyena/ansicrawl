@@ -125,6 +125,7 @@ static const struct {
 };
 
 typedef enum : uint8_t {
+    AMP_STYLE_NONE      = 0,
     AMP_HIDDEN          = (1 << 0),     AMP_FAINT           = (1 << 1),
     AMP_ITALIC          = (1 << 2),     AMP_UNDERLINE       = (1 << 3),
     AMP_BLINKING        = (1 << 4),     AMP_STRIKETHROUGH   = (1 << 5)
@@ -164,7 +165,7 @@ static inline size_t                    amp_glyph_row_to_str(
     char *                                  str_dst,
     size_t                                  str_dst_size
 );
-static inline const char *              amp_set_glyph(
+static inline const char *              amp_put_glyph(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
@@ -180,28 +181,11 @@ static inline AMP_STYLE                 amp_get_style(
     uint32_t                                x,
     uint32_t                                y
 );
-static inline bool                      amp_set_style(
+static inline bool                      amp_put_style(
     struct amp_type *                       amp,
     uint32_t                                x,
     uint32_t                                y,
     AMP_STYLE                               style
-);
-static inline bool                      amp_add_style(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y,
-    AMP_STYLE                               style
-);
-static inline bool                      amp_rem_style(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y,
-    AMP_STYLE                               style
-);
-static inline bool                      amp_reset_style(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y
 );
 static inline bool                      amp_set_background(
     struct amp_type *                       amp,
@@ -258,10 +242,6 @@ struct amp_type {
     struct {
         size_t size;
         uint8_t *data;
-
-        AMP_COLOR foreground;
-        AMP_COLOR background;
-        AMP_STYLE decoration;
     } mode;
 
     AMP_PALETTE palette;
@@ -653,7 +633,7 @@ static inline int amp_utf8_code_point_size(const char *str, size_t n) {
     return -1; // invalid or incomplete multibyte character
 }
 
-static inline const char *amp_set_glyph(
+static inline const char *amp_put_glyph(
     struct amp_type *amp, uint32_t x, uint32_t y, const char *glyph
 ) {
     ssize_t cell_index = amp_get_cell_index(amp, x, y);
@@ -759,7 +739,7 @@ static inline AMP_STYLE amp_get_style(
     );
 }
 
-static inline bool amp_set_style(
+static inline bool amp_put_style(
     struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
 ) {
     auto mode = amp_get_mode(amp, x, y);
@@ -772,24 +752,6 @@ static inline bool amp_set_style(
     mode.bitset.strikethrough   = style & AMP_STRIKETHROUGH;
 
     return amp_set_mode(amp, x, y, mode);
-}
-
-static inline bool amp_add_style(
-    struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
-) {
-    return amp_set_style(amp, x, y, style | amp_get_style(amp, x, y));
-}
-
-static inline bool amp_rem_style(
-    struct amp_type *amp, uint32_t x, uint32_t y, AMP_STYLE style
-) {
-    return amp_set_style(amp, x, y, amp_get_style(amp, x, y) & (~style));
-}
-
-static inline bool amp_reset_style(
-    struct amp_type *amp, uint32_t x, uint32_t y
-) {
-    return amp_set_style(amp, x, y, 0);
 }
 
 static inline bool amp_set_background(
