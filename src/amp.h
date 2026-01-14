@@ -664,39 +664,13 @@ static inline const char *              amp_str_seg_first_line_size(
     size_t                                  str_size,
     size_t *                                line_size
 );
-static inline const char *              amp_str_first_line_size(
-    const char *                            str,
-    size_t *                                line_size
-);
-static inline const char *              amp_str_seg_skip_style_sign(
-    const char *                            str,
-    size_t                                  str_size
-);
-static inline const char *              amp_str_skip_style_sign(
-    const char *                            str
-);
 static inline const char *              amp_str_seg_skip_utf8_symbol(
     const char *                            str,
     size_t                                  str_size
 );
-static inline const char *              amp_str_skip_utf8_symbol(
-    const char *                            str
-);
-static inline const char *              amp_str_seg_skip_utf8_symbol_count(
-    const char *                            str,
-    size_t                                  str_size,
-    size_t                                  utf8_symbol_count
-);
-static inline const char *              amp_str_skip_utf8_symbol_count(
-    const char *                            str,
-    size_t                                  utf8_symbol_count
-);
 static inline size_t                    amp_str_seg_width(
     const char *                            str,
     size_t                                  str_size
-);
-static inline size_t                    amp_str_width(
-    const char *                            str
 );
 static inline void                      amp_draw_text_clip(
     struct amp_type *                       amp,
@@ -716,6 +690,24 @@ static inline size_t                    amp_draw_multiline_text_clip(
     AMP_ALIGN                               text_alignment,
     const char *                            text_str,
     size_t                                  text_str_size
+);
+static inline const char *              amp_str_seg_skip_spaces(
+    const char *                            str,
+    size_t                                  str_size
+);
+static inline const char *              amp_str_seg_skip_wrap(
+    const char *                            str,
+    size_t                                  str_size,
+    size_t                                  wrap_width
+);
+static inline const char *              amp_str_seg_skip_word(
+    const char *                            str,
+    size_t                                  str_size
+);
+static inline const char *              amp_str_seg_skip_width(
+    const char *                            str,
+    size_t                                  str_size,
+    size_t                                  max_width
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1133,18 +1125,18 @@ static inline size_t amp_draw_multiline_text_clip(
     const char *line = text_str;
     long y = 0;
 
-    while (*line) {
-        size_t linesz;
+    while (*line && line < text_str + text_str_size) {
+        size_t line_size;
         const char *next_line = amp_str_seg_first_line_size(
             line, amp_sub_size(text_str_size, (size_t) (line - text_str)),
-            &linesz
+            &line_size
         );
 
-        const size_t line_width = amp_str_seg_width(line, linesz);
+        const size_t line_width = amp_str_seg_width(line, line_size);
 
         if (line_width > text_max_width) {
-            const char *clip_end = amp_str_seg_skip_utf8_symbol_count(
-                line, linesz, text_max_width
+            const char *clip_end = amp_str_seg_skip_wrap(
+                line, line_size, text_max_width
             );
 
             const size_t clip_size = (size_t) (clip_end - line);
@@ -1157,20 +1149,31 @@ static inline size_t amp_draw_multiline_text_clip(
             ++y;
             ++line_count;
 
-            if (clip_size < linesz) {
-                size_t extra_lines = amp_draw_multiline_text_clip(
-                    amp, text_style, text_x, text_y + y, text_max_width,
-                    text_alignment, clip_end, amp_sub_size(linesz, clip_size)
+            if (clip_size < line_size) {
+                const char *space_end = amp_str_seg_skip_spaces(
+                    clip_end, amp_sub_size(line_size, clip_size)
                 );
 
-                y += (long) extra_lines;
-                line_count += extra_lines;
+                const size_t space_size = (size_t) (space_end - clip_end);
+                const size_t trail_size = amp_sub_size(
+                    line_size, clip_size + space_size
+                );
+
+                if (trail_size) {
+                    size_t extra_lines = amp_draw_multiline_text_clip(
+                        amp, text_style, text_x, text_y + y, text_max_width,
+                        text_alignment, space_end, trail_size
+                    );
+
+                    y += (long) extra_lines;
+                    line_count += extra_lines;
+                }
             }
         }
         else {
             amp_draw_text_clip(
                 amp, text_style, text_x, text_y + y, text_alignment,
-                line, linesz
+                line, line_size
             );
 
             ++y;
@@ -1823,45 +1826,6 @@ static inline const char *amp_str_seg_first_line_size(
     return s;
 }
 
-static inline const char *amp_str_first_line_size(
-    const char *str, size_t *line_size
-) {
-    return amp_str_seg_first_line_size(str, strlen(str), line_size);
-}
-
-static inline const char *amp_str_seg_skip_style_sign(
-    const char *str, size_t str_sz
-) {
-    const char *s = str;
-    bool style = false;
-
-    while (*s && s < str + str_sz) {
-        if (*s == '{' && !style) {
-            style = true;
-        }
-        else if (style) {
-            if (*s == '{') {
-                return s;
-            }
-
-            const char *end = amp_str_seg_skip_utf8_symbol(
-                s, str_sz - (size_t) (s - str)
-            );
-
-            return end > s ? end : str;
-        }
-        else break;
-
-        ++s;
-    }
-
-    return str;
-}
-
-static inline const char *amp_str_skip_style_sign(const char *str) {
-    return amp_str_seg_skip_style_sign(str, strlen(str));
-}
-
 static inline const char *amp_str_seg_skip_utf8_symbol(
     const char *str, size_t str_sz
 ) {
@@ -1879,10 +1843,6 @@ static inline const char *amp_str_seg_skip_utf8_symbol(
     }
 
     return str + sz;
-}
-
-static inline const char *amp_str_skip_utf8_symbol(const char *str) {
-    return amp_str_seg_skip_utf8_symbol(str, strlen(str));
 }
 
 static inline size_t amp_str_seg_width(const char *str, size_t str_sz) {
@@ -1909,39 +1869,122 @@ static inline size_t amp_str_seg_width(const char *str, size_t str_sz) {
     return width;
 }
 
-static inline size_t amp_str_width(const char *str) {
-    return amp_str_seg_width(str, strlen(str));
-}
-
-static inline const char *amp_str_seg_skip_utf8_symbol_count(
-    const char *str, size_t str_size, size_t utf8_symbol_count
+static inline const char *amp_str_seg_skip_spaces(
+    const char *str, size_t str_sz
 ) {
     const char *s = str;
-    size_t count = 0;
 
-    while (*s && s < str + str_size) {
+    while (*s && s < str + str_sz) {
         const char *next = amp_str_seg_skip_utf8_symbol(
-            s, str_size - (size_t) (s - str)
+            s, str_sz - (size_t) (s - str)
         );
 
-        if (next <= s) {
+        if (next == s) {
             break;
         }
 
-        s = next;
+        --next;
 
-        if (++count >= utf8_symbol_count) {
-            break;
+        if (*next != ' ') {
+            return s;
         }
+
+        s = next + 1;
     }
 
     return s;
 }
 
-static inline const char *amp_str_skip_utf8_symbol_count(
-    const char *str, size_t symbol_count
+static inline const char *amp_str_seg_skip_word(
+    const char *str, size_t str_sz
 ) {
-    return amp_str_seg_skip_utf8_symbol_count(str, strlen(str), symbol_count);
+    const char *s = amp_str_seg_skip_spaces(str, str_sz);
+
+    if (s != str) {
+        return str;
+    }
+
+    while (*s && s < str + str_sz) {
+        const char *next = amp_str_seg_skip_utf8_symbol(
+            s, str_sz - (size_t) (s - str)
+        );
+
+        if (next == s) {
+            return s;
+        }
+
+        --next;
+
+        if (*next == ' ') {
+            return s;
+        }
+
+        s = next + 1;
+    }
+
+    return s;
+}
+
+static inline const char *amp_str_seg_skip_width(
+    const char *str, size_t str_sz, size_t max_width
+) {
+    const char *s = str;
+    size_t width = 0;
+
+    while (*s && s < str + str_sz) {
+        if (width++ >= max_width) {
+            break;
+        }
+
+        const char *next = amp_str_seg_skip_utf8_symbol(
+            s, str_sz - (size_t) (s - str)
+        );
+
+        if (next == s) {
+            break;
+        }
+
+        s = next;
+    }
+
+    return s;
+}
+
+static inline const char *amp_str_seg_skip_wrap(
+    const char *str, size_t str_sz, size_t wrap_width
+) {
+    const char *s = str;
+    size_t width = 0;
+    size_t max_width = wrap_width;
+
+    while (*s && s < str + str_sz) {
+        const char *next = amp_str_seg_skip_spaces(
+            s, str_sz - (size_t) (s - str)
+        );
+
+        next = amp_str_seg_skip_word(next, str_sz - (size_t) (next - str));
+
+        if (next == s) {
+            break;
+        }
+
+        size_t diff = (size_t) (next - s);
+        size_t add_width = amp_utf8_code_point_count(s, diff);
+        size_t next_width = width + add_width;
+
+        if (next_width > max_width) {
+            if (!width) {
+                return amp_str_seg_skip_width(str, str_sz, wrap_width);
+            }
+
+            break;
+        }
+
+        width = next_width;
+        s = next;
+    }
+
+    return s;
 }
 
 #endif
