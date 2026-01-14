@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdckdint.h>
 #include <limits.h>
+#include <ctype.h>
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -977,6 +978,11 @@ static inline void amp_draw_glyph(
     }
 
     memcpy(glyph, glyph_str, (size_t) cpsz);
+
+    if (cpsz == 1 && !isprint(glyph[0])) {
+        glyph[0] = '?';
+    }
+
     amp_put_glyph(amp, glyph, (uint32_t) x, (uint32_t) y);
 }
 
@@ -1005,7 +1011,7 @@ static inline void amp_draw_text(
     }
 
     if (align == AMP_ALIGN_RIGHT) {
-        x -= text_width;
+        x = (x - text_width) + 1;
     }
     else if (align == AMP_ALIGN_CENTER) {
         x -= text_width / 2;
