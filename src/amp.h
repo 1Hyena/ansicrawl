@@ -63,73 +63,38 @@ struct amp_color_type {
     uint8_t b;
 };
 
-static const struct {
-    AMP_COLOR               index;
-    struct amp_color_type   color;
-} amp_color_table[] = {
-    [AMP_COLOR_NONE] = {
-        .index  = AMP_COLOR_NONE,
-        .color  = {}
-    },
+typedef enum : uint64_t {
+    AMP_STYLE_NONE      = 0,
     ////////////////////////////////////////////////////////////////////////////
-    [AMP_BLACK] = {
-        .index  = AMP_BLACK,    .color  = { .r  = 0,    .g  = 0,    .b  = 0   }
-    },
-    [AMP_MAROON] = {
-        .index  = AMP_MAROON,   .color  = { .r  = 128,  .g  = 0,    .b  = 0   }
-    },
-    [AMP_GREEN] = {
-        .index  = AMP_GREEN,    .color  = { .r  = 0,    .g  = 128,  .b  = 0   }
-    },
-    [AMP_OLIVE] = {
-        .index  = AMP_OLIVE,    .color  = { .r  = 128,  .g  = 128,  .b  = 0   }
-    },
-    [AMP_NAVY] = {
-        .index  = AMP_NAVY,     .color  = { .r  = 0,    .g  = 0,    .b  = 128 }
-    },
-    [AMP_PURPLE] = {
-        .index  = AMP_PURPLE,   .color  = { .r  = 128,  .g  = 0,    .b  = 128 }
-    },
-    [AMP_TEAL] = {
-        .index  = AMP_TEAL,     .color  = { .r  = 0,    .g  = 128,  .b  = 128 }
-    },
-    [AMP_SILVER] = {
-        .index  = AMP_SILVER,   .color  = { .r  = 128,  .g  = 128,  .b  = 128 }
-    },
-    [AMP_GRAY] = {
-        .index  = AMP_GRAY,     .color  = { .r  = 64,   .g  = 64,   .b  = 64  }
-    },
-    [AMP_RED] = {
-        .index  = AMP_RED,      .color  = { .r  = 255,  .g  = 0,    .b  = 0   }
-    },
-    [AMP_LIME] = {
-        .index  = AMP_LIME,     .color  = { .r  = 0,    .g  = 255,  .b  = 0   }
-    },
-    [AMP_YELLOW] = {
-        .index  = AMP_YELLOW,   .color  = { .r  = 255,  .g  = 255,  .b  = 0   }
-    },
-    [AMP_BLUE] = {
-        .index  = AMP_BLUE,     .color  = { .r  = 0,    .g  = 0,    .b  = 255 }
-    },
-    [AMP_MAGENTA] = {
-        .index  = AMP_MAGENTA,  .color  = { .r  = 255,  .g  = 0,    .b  = 255 }
-    },
-    [AMP_CYAN] = {
-        .index  = AMP_CYAN,     .color  = { .r  = 0,    .g  = 255,  .b  = 255 }
-    },
-    [AMP_WHITE] = {
-        .index  = AMP_WHITE,    .color  = { .r  = 255,  .g  = 255,  .b  = 255 }
-    },
+    AMP_HIDDEN          = (1ULL <<  0), AMP_FAINT           = (1ULL <<  1),
+    AMP_ITALIC          = (1ULL <<  2), AMP_UNDERLINE       = (1ULL <<  3),
+    AMP_BLINKING        = (1ULL <<  4), AMP_STRIKETHROUGH   = (1ULL <<  5),
     ////////////////////////////////////////////////////////////////////////////
-    [AMP_MAX_COLOR] = {}
-};
+    AMP_FG_NONE         = (1ULL <<  6), AMP_FG_BLACK        = (1ULL <<  7),
+    AMP_FG_MAROON       = (1ULL <<  8), AMP_FG_GREEN        = (1ULL <<  9),
+    AMP_FG_OLIVE        = (1ULL << 10), AMP_FG_NAVY         = (1ULL << 11),
+    AMP_FG_PURPLE       = (1ULL << 12), AMP_FG_TEAL         = (1ULL << 13),
+    AMP_FG_SILVER       = (1ULL << 14), AMP_FG_GRAY         = (1ULL << 15),
+    AMP_FG_RED          = (1ULL << 16), AMP_FG_LIME         = (1ULL << 17),
+    AMP_FG_YELLOW       = (1ULL << 18), AMP_FG_BLUE         = (1ULL << 19),
+    AMP_FG_MAGENTA      = (1ULL << 20), AMP_FG_CYAN         = (1ULL << 21),
+    AMP_FG_WHITE        = (1ULL << 22),
+    ////////////////////////////////////////////////////////////////////////////
+    AMP_BG_NONE         = (1ULL << 24), AMP_BG_BLACK        = (1ULL << 25),
+    AMP_BG_MAROON       = (1ULL << 26), AMP_BG_GREEN        = (1ULL << 27),
+    AMP_BG_OLIVE        = (1ULL << 28), AMP_BG_NAVY         = (1ULL << 29),
+    AMP_BG_PURPLE       = (1ULL << 30), AMP_BG_TEAL         = (1ULL << 31),
+    AMP_BG_SILVER       = (1ULL << 32), AMP_BG_GRAY         = (1ULL << 33),
+    AMP_BG_RED          = (1ULL << 34), AMP_BG_LIME         = (1ULL << 35),
+    AMP_BG_YELLOW       = (1ULL << 36), AMP_BG_BLUE         = (1ULL << 37),
+    AMP_BG_MAGENTA      = (1ULL << 38), AMP_BG_CYAN         = (1ULL << 39),
+    AMP_BG_WHITE        = (1ULL << 40)
+} AMP_STYLE;
 
 typedef enum : uint8_t {
-    AMP_STYLE_NONE      = 0,
-    AMP_HIDDEN          = (1 << 0),     AMP_FAINT           = (1 << 1),
-    AMP_ITALIC          = (1 << 2),     AMP_UNDERLINE       = (1 << 3),
-    AMP_BLINKING        = (1 << 4),     AMP_STRIKETHROUGH   = (1 << 5)
-} AMP_STYLE;
+    AMP_PAL_RGB16 = 0,
+    AMP_PAL_24BIT
+} AMP_PALETTE;
 
 // Public API: /////////////////////////////////////////////////////////////////
 static inline size_t                    amp_init(
@@ -187,28 +152,6 @@ static inline bool                      amp_put_style(
     uint32_t                                y,
     AMP_STYLE                               style
 );
-static inline bool                      amp_set_background(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y,
-    struct amp_color_type                   color
-);
-static inline bool                      amp_reset_background(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y
-);
-static inline bool                      amp_set_foreground(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y,
-    struct amp_color_type                   color
-);
-static inline bool                      amp_reset_foreground(
-    struct amp_type *                       amp,
-    uint32_t                                x,
-    uint32_t                                y
-);
 static inline struct amp_color_type     amp_map_rgb(
     uint8_t                                 r,
     uint8_t                                 g,
@@ -223,12 +166,11 @@ static inline void                      amp_unmap_rgb(
 static inline struct amp_color_type     amp_lookup_color(
     AMP_COLOR                               index
 );
+static inline void                      amp_set_palette(
+    struct amp_type *                       amp,
+    AMP_PALETTE                             palette
+);
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum : uint8_t {
-    AMP_PAL_RGB16 = 0,
-    AMP_PAL_24BIT
-} AMP_PALETTE;
 
 struct amp_type {
     uint32_t width;
@@ -291,6 +233,137 @@ static const char *amp_number_table[] = {
     "230", "231", "232", "233", "234", "235", "236", "237", "238", "239", "240",
     "241", "242", "243", "244", "245", "246", "247", "248", "249", "250", "251",
     "252", "253", "254", "255"
+};
+
+static const struct {
+    struct {
+        AMP_STYLE fg;
+        AMP_STYLE bg;
+    } style;
+
+    struct amp_color_type   color;
+    AMP_COLOR               index;
+} amp_color_table[] = {
+    [AMP_COLOR_NONE] = {
+        .index  = AMP_COLOR_NONE,
+        .color  = {},
+        .style  = { .fg = AMP_FG_NONE, .bg = AMP_BG_NONE }
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_BLACK] = {
+        .index  = AMP_BLACK,    .color  = { .r  = 0,    .g  = 0,    .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_BLACK,
+            .bg = AMP_BG_BLACK
+        }
+    },
+    [AMP_MAROON] = {
+        .index  = AMP_MAROON,   .color  = { .r  = 128,  .g  = 0,    .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_MAROON,
+            .bg = AMP_BG_MAROON
+        }
+    },
+    [AMP_GREEN] = {
+        .index  = AMP_GREEN,    .color  = { .r  = 0,    .g  = 128,  .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_GREEN,
+            .bg = AMP_BG_GREEN
+        }
+    },
+    [AMP_OLIVE] = {
+        .index  = AMP_OLIVE,    .color  = { .r  = 128,  .g  = 128,  .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_OLIVE,
+            .bg = AMP_BG_OLIVE
+        }
+    },
+    [AMP_NAVY] = {
+        .index  = AMP_NAVY,     .color  = { .r  = 0,    .g  = 0,    .b  = 128 },
+        .style  = {
+            .fg = AMP_FG_NAVY,
+            .bg = AMP_BG_NAVY
+        }
+    },
+    [AMP_PURPLE] = {
+        .index  = AMP_PURPLE,   .color  = { .r  = 128,  .g  = 0,    .b  = 128 },
+        .style  = {
+            .fg = AMP_FG_PURPLE,
+            .bg = AMP_BG_PURPLE
+        }
+    },
+    [AMP_TEAL] = {
+        .index  = AMP_TEAL,     .color  = { .r  = 0,    .g  = 128,  .b  = 128 },
+        .style  = {
+            .fg = AMP_FG_TEAL,
+            .bg = AMP_BG_TEAL
+        }
+    },
+    [AMP_SILVER] = {
+        .index  = AMP_SILVER,   .color  = { .r  = 128,  .g  = 128,  .b  = 128 },
+        .style  = {
+            .fg = AMP_FG_SILVER,
+            .bg = AMP_BG_SILVER
+        }
+    },
+    [AMP_GRAY] = {
+        .index  = AMP_GRAY,     .color  = { .r  = 64,   .g  = 64,   .b  = 64  },
+        .style  = {
+            .fg = AMP_FG_GRAY,
+            .bg = AMP_BG_GRAY
+        }
+    },
+    [AMP_RED] = {
+        .index  = AMP_RED,      .color  = { .r  = 255,  .g  = 0,    .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_RED,
+            .bg = AMP_BG_RED
+        }
+    },
+    [AMP_LIME] = {
+        .index  = AMP_LIME,     .color  = { .r  = 0,    .g  = 255,  .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_LIME,
+            .bg = AMP_BG_LIME
+        }
+    },
+    [AMP_YELLOW] = {
+        .index  = AMP_YELLOW,   .color  = { .r  = 255,  .g  = 255,  .b  = 0   },
+        .style  = {
+            .fg = AMP_FG_YELLOW,
+            .bg = AMP_BG_YELLOW
+        }
+    },
+    [AMP_BLUE] = {
+        .index  = AMP_BLUE,     .color  = { .r  = 0,    .g  = 0,    .b  = 255 },
+        .style  = {
+            .fg = AMP_FG_BLUE,
+            .bg = AMP_BG_BLUE
+        }
+    },
+    [AMP_MAGENTA] = {
+        .index  = AMP_MAGENTA,  .color  = { .r  = 255,  .g  = 0,    .b  = 255 },
+        .style  = {
+            .fg = AMP_FG_MAGENTA,
+            .bg = AMP_BG_MAGENTA
+        }
+    },
+    [AMP_CYAN] = {
+        .index  = AMP_CYAN,     .color  = { .r  = 0,    .g  = 255,  .b  = 255 },
+        .style  = {
+            .fg = AMP_FG_CYAN,
+            .bg = AMP_BG_CYAN
+        }
+    },
+    [AMP_WHITE] = {
+        .index  = AMP_WHITE,    .color  = { .r  = 255,  .g  = 255,  .b  = 255 },
+        .style  = {
+            .fg = AMP_FG_WHITE,
+            .bg = AMP_BG_WHITE
+        }
+    },
+    ////////////////////////////////////////////////////////////////////////////
+    [AMP_MAX_COLOR] = {}
 };
 
 static const struct amp_rgb16_type {
@@ -582,6 +655,10 @@ static inline void amp_clear(struct amp_type *amp) {
     memset(amp->mode.data, 0, amp->mode.size);
 }
 
+static inline void amp_set_palette(struct amp_type *amp, AMP_PALETTE palette) {
+    amp->palette = palette;
+}
+
 static inline ssize_t amp_get_cell_index(
     const struct amp_type *amp, long x, long y
 ) {
@@ -744,6 +821,88 @@ static inline bool amp_put_style(
 ) {
     auto mode = amp_get_mode(amp, x, y);
 
+    constexpr AMP_STYLE bg_colors = (
+        AMP_BG_NONE|AMP_BG_BLACK|AMP_BG_MAROON| AMP_BG_GREEN|AMP_BG_OLIVE|
+        AMP_BG_NAVY|AMP_BG_PURPLE|AMP_BG_TEAL|AMP_BG_SILVER|AMP_BG_GRAY|
+        AMP_BG_RED|AMP_BG_LIME|AMP_BG_YELLOW|AMP_BG_BLUE|AMP_BG_MAGENTA|
+        AMP_BG_CYAN|AMP_BG_WHITE
+    );
+
+    constexpr AMP_STYLE fg_colors = (
+        AMP_FG_NONE|AMP_FG_BLACK|AMP_FG_MAROON| AMP_FG_GREEN|AMP_FG_OLIVE|
+        AMP_FG_NAVY|AMP_FG_PURPLE|AMP_FG_TEAL|AMP_FG_SILVER|AMP_FG_GRAY|
+        AMP_FG_RED|AMP_FG_LIME|AMP_FG_YELLOW|AMP_FG_BLUE|AMP_FG_MAGENTA|
+        AMP_FG_CYAN|AMP_FG_WHITE
+    );
+
+    if (style & bg_colors) {
+        if (style & AMP_BG_NONE) {
+            mode.bitset.bg = false;
+        }
+        else {
+            unsigned bg_r = 0;
+            unsigned bg_g = 0;
+            unsigned bg_b = 0;
+            unsigned bg_colors = 0;
+
+            mode.bitset.bg = true;
+
+            for (AMP_COLOR i = AMP_COLOR_NONE + 1; i < AMP_MAX_COLOR; ++i) {
+                auto row = amp_color_table[i];
+
+                if (row.style.bg & style) {
+                    bg_r += row.color.r;
+                    bg_g += row.color.g;
+                    bg_b += row.color.b;
+
+                    ++bg_colors;
+                }
+            }
+
+            bg_r /= bg_colors;
+            bg_g /= bg_colors;
+            bg_b /= bg_colors;
+
+            mode.bg = amp_map_rgb(
+                (uint8_t) bg_r, (uint8_t) bg_g, (uint8_t) bg_b
+            );
+        }
+    }
+
+    if (style & fg_colors) {
+        if (style & AMP_FG_NONE) {
+            mode.bitset.fg = false;
+        }
+        else {
+            unsigned fg_r = 0;
+            unsigned fg_g = 0;
+            unsigned fg_b = 0;
+            unsigned fg_colors = 0;
+
+            mode.bitset.fg = true;
+
+            for (AMP_COLOR i = AMP_COLOR_NONE + 1; i < AMP_MAX_COLOR; ++i) {
+                auto row = amp_color_table[i];
+
+                if (row.style.fg & style) {
+                    fg_r += row.color.r;
+                    fg_g += row.color.g;
+                    fg_b += row.color.b;
+
+                    ++fg_colors;
+                }
+            }
+
+            fg_r /= fg_colors;
+            fg_g /= fg_colors;
+            fg_b /= fg_colors;
+
+            mode.fg = amp_map_rgb(
+                (uint8_t) fg_r, (uint8_t) fg_g, (uint8_t) fg_b
+            );
+        }
+    }
+
     mode.bitset.hidden          = style & AMP_HIDDEN;
     mode.bitset.faint           = style & AMP_FAINT;
     mode.bitset.italic          = style & AMP_ITALIC;
@@ -752,62 +911,6 @@ static inline bool amp_put_style(
     mode.bitset.strikethrough   = style & AMP_STRIKETHROUGH;
 
     return amp_set_mode(amp, x, y, mode);
-}
-
-static inline bool amp_set_background(
-    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_color_type color
-) {
-    struct amp_mode_type mode = amp_get_mode(amp, x, y);
-
-    mode.bg = color;
-    mode.bitset.bg = true;
-
-    return amp_set_mode(amp, x, y, mode);
-}
-
-static inline bool amp_reset_background(
-    struct amp_type *amp, uint32_t x, uint32_t y
-) {
-    struct amp_mode_type mode = amp_get_mode(amp, x, y);
-
-    mode.bitset.bg = false;
-
-    return amp_set_mode(amp, x, y, mode);
-}
-
-static inline bool amp_set_foreground(
-    struct amp_type *amp, uint32_t x, uint32_t y, struct amp_color_type color
-) {
-    struct amp_mode_type mode = amp_get_mode(amp, x, y);
-
-    mode.fg = color;
-    mode.bitset.fg = true;
-
-    return amp_set_mode(amp, x, y, mode);
-}
-
-static inline bool amp_reset_foreground(
-    struct amp_type *amp, uint32_t x, uint32_t y
-) {
-    struct amp_mode_type mode = amp_get_mode(amp, x, y);
-
-    mode.bitset.fg = false;
-
-    return amp_set_mode(amp, x, y, mode);
-}
-
-static inline struct amp_color_type amp_map_rgb(
-    uint8_t r, uint8_t g, uint8_t b
-) {
-    return (struct amp_color_type) { .r = r, .g = g, .b = b };
-}
-
-static inline void amp_unmap_rgb(
-    struct amp_color_type color, uint8_t * r, uint8_t * g, uint8_t * b
-) {
-    *r = color.r;
-    *g = color.g;
-    *b = color.b;
 }
 
 static inline const char *amp_get_glyph(
@@ -1399,6 +1502,20 @@ static inline struct amp_color_type amp_lookup_color(AMP_COLOR index) {
             amp_color_table[index].color
         ) : amp_color_table[AMP_COLOR_NONE].color
     );
+}
+
+static inline struct amp_color_type amp_map_rgb(
+    uint8_t r, uint8_t g, uint8_t b
+) {
+    return (struct amp_color_type) { .r = r, .g = g, .b = b };
+}
+
+static inline void amp_unmap_rgb(
+    struct amp_color_type color, uint8_t * r, uint8_t * g, uint8_t * b
+) {
+    *r = color.r;
+    *g = color.g;
+    *b = color.b;
 }
 
 #endif
