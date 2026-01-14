@@ -131,6 +131,15 @@ static inline void                      amp_draw_text(
     AMP_ALIGN                               text_alignment,
     const char *                            text_str
 );
+static inline size_t                    amp_draw_multiline_text(
+    struct amp_type *                       amp,
+    AMP_STYLE                               text_style,
+    long                                    text_x,
+    long                                    text_y,
+    uint32_t                                text_max_width,
+    AMP_ALIGN                               text_alignment,
+    const char *                            text_str
+);
 static inline size_t                    amp_to_ans(
     const struct amp_type *                 amp,
     char *                                  ans_dst,
@@ -611,6 +620,10 @@ static inline int                       amp_utf8_code_point_size(
     const char *                            utf8_str,
     size_t                                  utf8_str_size
 );
+static inline size_t                    amp_utf8_code_point_count(
+    const char *                            utf8_str,
+    size_t                                  utf8_str_size
+);
 static inline size_t                    amp_mode_to_ans(
     struct amp_mode_type                    mode,
     AMP_PALETTE                             palette,
@@ -645,6 +658,64 @@ static inline size_t                    amp_str_append(
 static inline struct amp_rgb16_type     amp_find_rgb16(
     const struct amp_rgb16_type *           table,
     struct amp_color_type                   color
+);
+static inline const char *              amp_str_seg_first_line_size(
+    const char *                            str,
+    size_t                                  str_size,
+    size_t *                                line_size
+);
+static inline const char *              amp_str_first_line_size(
+    const char *                            str,
+    size_t *                                line_size
+);
+static inline const char *              amp_str_seg_skip_style_sign(
+    const char *                            str,
+    size_t                                  str_size
+);
+static inline const char *              amp_str_skip_style_sign(
+    const char *                            str
+);
+static inline const char *              amp_str_seg_skip_utf8_symbol(
+    const char *                            str,
+    size_t                                  str_size
+);
+static inline const char *              amp_str_skip_utf8_symbol(
+    const char *                            str
+);
+static inline const char *              amp_str_seg_skip_utf8_symbol_count(
+    const char *                            str,
+    size_t                                  str_size,
+    size_t                                  utf8_symbol_count
+);
+static inline const char *              amp_str_skip_utf8_symbol_count(
+    const char *                            str,
+    size_t                                  utf8_symbol_count
+);
+static inline size_t                    amp_str_seg_width(
+    const char *                            str,
+    size_t                                  str_size
+);
+static inline size_t                    amp_str_width(
+    const char *                            str
+);
+static inline void                      amp_draw_text_clip(
+    struct amp_type *                       amp,
+    AMP_STYLE                               text_style,
+    long                                    text_x,
+    long                                    text_y,
+    AMP_ALIGN                               text_alignment,
+    const char *                            text_str,
+    size_t                                  text_str_size
+);
+static inline size_t                    amp_draw_multiline_text_clip(
+    struct amp_type *                       amp,
+    AMP_STYLE                               text_style,
+    long                                    text_x,
+    long                                    text_y,
+    uint32_t                                text_max_width,
+    AMP_ALIGN                               text_alignment,
+    const char *                            text_str,
+    size_t                                  text_str_size
 );
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -730,6 +801,27 @@ static inline int amp_utf8_code_point_size(const char *str, size_t n) {
     }
 
     return -1; // invalid or incomplete multibyte character
+}
+
+static inline size_t amp_utf8_code_point_count(
+    const char *utf8_str, size_t utf8_str_size
+) {
+    size_t code_point_count = 0;
+
+    for (const char *s = utf8_str; *s;) {
+        int cpsz = amp_utf8_code_point_size(
+            s, amp_sub_size(utf8_str_size, (size_t) (s - utf8_str))
+        );
+
+        if (cpsz < 0) {
+            break;
+        }
+
+        ++code_point_count;
+        s += cpsz;
+    }
+
+    return code_point_count;
 }
 
 static inline const char *amp_get_glyph(
@@ -909,6 +1001,7 @@ static inline bool amp_put_style(
             );
         }
     }
+    else mode.bitset.bg = false;
 
     if (style & fg_colors) {
         if (style & AMP_FG_NONE) {
@@ -943,6 +1036,7 @@ static inline bool amp_put_style(
             );
         }
     }
+    else mode.bitset.fg = false;
 
     mode.bitset.hidden          = style & AMP_HIDDEN;
     mode.bitset.faint           = style & AMP_FAINT;
@@ -984,31 +1078,18 @@ static inline void amp_draw_glyph(
     }
 
     amp_put_glyph(amp, glyph, (uint32_t) x, (uint32_t) y);
+    amp_put_style(amp, style, (uint32_t) x, (uint32_t) y);
 }
 
-static inline void amp_draw_text(
+static inline void amp_draw_text_clip(
     struct amp_type *amp, AMP_STYLE style, long x, long y, AMP_ALIGN align,
-    const char *text
+    const char *text, size_t text_size
 ) {
     if (y < 0 || y >= amp->height || y > UINT32_MAX) {
         return;
     }
 
-    const size_t text_size = strlen(text);
-    uint32_t text_width = 0;
-
-    for (const char *s = text; *s;) {
-        int cpsz = amp_utf8_code_point_size(
-            s, amp_sub_size(text_size, (size_t) (s - text))
-        );
-
-        if (cpsz < 0) {
-            break;
-        }
-
-        ++text_width;
-        s += cpsz;
-    }
+    uint32_t text_width = (uint32_t) amp_utf8_code_point_count(text, text_size);
 
     if (align == AMP_ALIGN_RIGHT) {
         x = (x - text_width) + 1;
@@ -1034,6 +1115,86 @@ static inline void amp_draw_text(
 
         s += cpsz;
     }
+}
+
+static inline void amp_draw_text(
+    struct amp_type *amp, AMP_STYLE style, long x, long y, AMP_ALIGN align,
+    const char *text
+) {
+    amp_draw_text_clip(amp, style, x, y, align, text, strlen(text));
+}
+
+static inline size_t amp_draw_multiline_text_clip(
+    struct amp_type *amp, AMP_STYLE text_style, long text_x, long text_y,
+    uint32_t text_max_width, AMP_ALIGN text_alignment, const char *text_str,
+    size_t text_str_size
+) {
+    size_t line_count = 0;
+    const char *line = text_str;
+    long y = 0;
+
+    while (*line) {
+        size_t linesz;
+        const char *next_line = amp_str_seg_first_line_size(
+            line, amp_sub_size(text_str_size, (size_t) (line - text_str)),
+            &linesz
+        );
+
+        const size_t line_width = amp_str_seg_width(line, linesz);
+
+        if (line_width > text_max_width) {
+            const char *clip_end = amp_str_seg_skip_utf8_symbol_count(
+                line, linesz, text_max_width
+            );
+
+            const size_t clip_size = (size_t) (clip_end - line);
+
+            amp_draw_text_clip(
+                amp, text_style, text_x, text_y + y, text_alignment,
+                line, clip_size
+            );
+
+            ++y;
+            ++line_count;
+
+            if (clip_size < linesz) {
+                size_t extra_lines = amp_draw_multiline_text_clip(
+                    amp, text_style, text_x, text_y + y, text_max_width,
+                    text_alignment, clip_end, amp_sub_size(linesz, clip_size)
+                );
+
+                y += (long) extra_lines;
+                line_count += extra_lines;
+            }
+        }
+        else {
+            amp_draw_text_clip(
+                amp, text_style, text_x, text_y + y, text_alignment,
+                line, linesz
+            );
+
+            ++y;
+            ++line_count;
+        }
+
+        if (next_line <= line) {
+            break;
+        }
+
+        line = next_line;
+    }
+
+    return line_count;
+}
+
+static inline size_t amp_draw_multiline_text(
+    struct amp_type *amp, AMP_STYLE text_style, long text_x, long text_y,
+    uint32_t text_max_width, AMP_ALIGN text_alignment, const char *text_str
+) {
+    return amp_draw_multiline_text_clip(
+        amp, text_style, text_x, text_y, text_max_width, text_alignment,
+        text_str, strlen(text_str)
+    );
 }
 
 static inline size_t amp_glyph_row_to_str(
@@ -1620,6 +1781,167 @@ static inline void amp_unmap_rgb(
     *r = color.r;
     *g = color.g;
     *b = color.b;
+}
+
+static inline const char *amp_str_seg_first_line_size(
+    const char *str, size_t str_sz, size_t *line_size
+) {
+    const char *begin = str;
+    const char *found = nullptr;
+    char after_found;
+
+    const char *s = str;
+
+    while (*s && s < str + str_sz) {
+        if (*s == '\n') {
+            found = s;
+            after_found = '\r';
+            break;
+        }
+        else if (*s == '\r') {
+            found = s;
+            after_found = '\n';
+            break;
+        }
+
+        ++s;
+    }
+
+    if (found) {
+        if (*(s + 1) == after_found) {
+            s += 2;
+        }
+        else {
+            s += 1;
+        }
+    }
+
+    if (line_size) {
+        *line_size = found ? (size_t) (found - begin) : (size_t) (s - begin);
+    }
+
+    return s;
+}
+
+static inline const char *amp_str_first_line_size(
+    const char *str, size_t *line_size
+) {
+    return amp_str_seg_first_line_size(str, strlen(str), line_size);
+}
+
+static inline const char *amp_str_seg_skip_style_sign(
+    const char *str, size_t str_sz
+) {
+    const char *s = str;
+    bool style = false;
+
+    while (*s && s < str + str_sz) {
+        if (*s == '{' && !style) {
+            style = true;
+        }
+        else if (style) {
+            if (*s == '{') {
+                return s;
+            }
+
+            const char *end = amp_str_seg_skip_utf8_symbol(
+                s, str_sz - (size_t) (s - str)
+            );
+
+            return end > s ? end : str;
+        }
+        else break;
+
+        ++s;
+    }
+
+    return str;
+}
+
+static inline const char *amp_str_skip_style_sign(const char *str) {
+    return amp_str_seg_skip_style_sign(str, strlen(str));
+}
+
+static inline const char *amp_str_seg_skip_utf8_symbol(
+    const char *str, size_t str_sz
+) {
+    if (!str_sz) {
+        return str;
+    }
+
+    int sz = amp_utf8_code_point_size(str, str_sz);
+
+    if (sz == 0) {
+        return str;
+    }
+    else if (sz < 0) {
+        return str + 1;
+    }
+
+    return str + sz;
+}
+
+static inline const char *amp_str_skip_utf8_symbol(const char *str) {
+    return amp_str_seg_skip_utf8_symbol(str, strlen(str));
+}
+
+static inline size_t amp_str_seg_width(const char *str, size_t str_sz) {
+    const char *s = str;
+    size_t width = 0;
+
+    while (*s && s < str + str_sz) {
+        size_t linesz;
+        const char *next_line = amp_str_seg_first_line_size(
+            s, str_sz - (size_t) (s - str), &linesz
+        );
+
+        size_t line_width = amp_utf8_code_point_count(s, linesz);
+
+        width = width > line_width ? width : line_width;
+
+        if (next_line <= s) {
+            break;
+        }
+
+        s = next_line;
+    }
+
+    return width;
+}
+
+static inline size_t amp_str_width(const char *str) {
+    return amp_str_seg_width(str, strlen(str));
+}
+
+static inline const char *amp_str_seg_skip_utf8_symbol_count(
+    const char *str, size_t str_size, size_t utf8_symbol_count
+) {
+    const char *s = str;
+    size_t count = 0;
+
+    while (*s && s < str + str_size) {
+        const char *next = amp_str_seg_skip_utf8_symbol(
+            s, str_size - (size_t) (s - str)
+        );
+
+        if (next <= s) {
+            break;
+        }
+
+        s = next;
+
+        if (++count >= utf8_symbol_count) {
+            break;
+        }
+    }
+
+    return s;
+}
+
+static inline const char *amp_str_skip_utf8_symbol_count(
+    const char *str, size_t symbol_count
+) {
+    return amp_str_seg_skip_utf8_symbol_count(str, strlen(str), symbol_count);
 }
 
 #endif
